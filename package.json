@@ -1,0 +1,16 @@
+{
+  "name": "jurys-out-peerserver",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Signaling server for Jury's Out. Only brokers introductions between players; no game data passes through it.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "peer": "^1.0.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

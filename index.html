@@ -416,6 +416,44 @@
   }
   .chat-msg.sarcasm .chat-msg-text{ border-left:3px solid #C9A0C0; font-style:italic; }
   .chat-msg.sarcasm{ animation:wobble .5s ease-in-out; }
+
+  details.settings{ margin-top:20px; }
+  details.settings summary{ color:var(--text-dim); font-size:13px; cursor:pointer; }
+
+  /* ---- chat compose ---- */
+  .compose{ border-top:1px solid var(--ink-line); padding:10px 20px 0; }
+  .compose-meta{ display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+  .mini-select{
+    background:var(--ink-soft); border:1px solid var(--ink-line); color:var(--text-light);
+    border-radius:999px; padding:6px 11px; font-size:12px; font-family:inherit; cursor:pointer;
+    max-width:52%; text-overflow:ellipsis;
+  }
+  .mini-select.on{ background:var(--brass); color:var(--ink); border-color:var(--brass); }
+  .mini-select.whisper-on{ background:#5C4A6E; color:var(--text-light); border-color:#8F76A8; }
+  .compose-row{ display:flex; gap:8px; align-items:flex-end; }
+  .compose-row textarea{
+    flex:1; min-height:44px; max-height:96px; padding:11px 12px; font-size:15px;
+    border-radius:8px; resize:none; line-height:1.35;
+  }
+  .btn-send{
+    background:var(--brass); color:var(--ink); border:none; border-radius:8px;
+    padding:0 16px; height:44px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer;
+  }
+  .btn-send:disabled{ background:var(--ink-line); color:var(--text-dim); cursor:not-allowed; }
+  .compose-count{ font-size:11px; color:var(--text-dim); text-align:right; padding:4px 0 0; }
+
+  /* category chips scroll horizontally so all groups stay reachable on a phone */
+  .chat-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:2px; flex-wrap:nowrap; }
+  .chat-tabs::-webkit-scrollbar{ display:none; }
+  .chat-tab{ flex:0 0 auto; white-space:nowrap; }
+
+  .chat-msg-to{
+    font-size:11px; color:var(--ice); margin-bottom:2px;
+  }
+  .chat-msg.whisper .chat-msg-text{
+    border:1px dashed #8F76A8; background:rgba(92,74,110,.22);
+  }
+  .chat-msg.whisper .chat-msg-to{ color:#C0A6D4; }
 </style>
 </head>
 <body>
@@ -444,6 +482,16 @@
   </div>
 
   <p class="status" id="landing-status"></p>
+
+  <details class="settings">
+    <summary>Settings</summary>
+    <div class="field" style="margin-top:12px;">
+      <label for="cfg-peer">Signaling server (optional)</label>
+      <input type="text" id="cfg-peer" placeholder="my-peerserver.onrender.com:443:/">
+      <p class="veil-note" style="margin:6px 0 0;">Leave blank to use the free shared PeerJS cloud. That server rate-limits busy clients, which is the usual cause of connection failures. Running your own PeerServer (Render and Fly both have free tiers) makes rooms reliable — see the README. Format: <span class="mono">host:port:path</span></p>
+    </div>
+    <button class="btn btn-secondary btn-small" id="btn-save-peer">Save server</button>
+  </details>
 </div>
 
 <!-- ============ SCREEN: LOBBY ============ -->
@@ -712,13 +760,21 @@
   <div class="chat-panel">
     <div class="chat-header"><span>The jury</span><button class="chat-close" id="btn-chat-close">Close</button></div>
     <div class="chat-feed" id="chat-feed"><div class="chat-empty" id="chat-empty">The room is quiet.<br>Pick a line below to make your case.</div></div>
-    <div class="chat-picker">
-      <div class="chat-tabs">
-        <button type="button" class="chat-tab active" data-tab="mine" id="chat-tab-mine">In character</button>
-        <button type="button" class="chat-tab" data-tab="general">General</button>
+    <div class="compose">
+      <div class="compose-meta">
+        <button type="button" class="mini-select" id="btn-chat-target">To: Everyone</button>
+        <button type="button" class="mini-select" id="btn-chat-whisper">Whisper: off</button>
+        <button type="button" class="mini-select" id="btn-chat-style">Say</button>
       </div>
-      <div class="chat-phrases" id="chat-phrases-mine"></div>
-      <div class="chat-phrases" id="chat-phrases-general" style="display:none;"></div>
+      <div class="compose-row">
+        <textarea id="chat-input" rows="1" maxlength="240" placeholder="Say something to the jury…"></textarea>
+        <button type="button" class="btn-send" id="btn-chat-send">Send</button>
+      </div>
+      <div class="compose-count"><span id="chat-count">0</span>/240</div>
+    </div>
+    <div class="chat-picker">
+      <div class="chat-tabs" id="chat-tabs"></div>
+      <div class="chat-phrases" id="chat-phrases"></div>
       <div class="chat-evidence-picker" id="chat-evidence-picker" style="display:none;"></div>
     </div>
   </div>
@@ -791,17 +847,49 @@ const SIGNAL_CANDIDATES = [
   { label: 'PeerJS cloud (explicit)', opts: { host: '0.peerjs.com', port: 443, secure: true, path: '/', debug: 1 } }
 ];
 
-// ?peer=my-server.example.com:443:/ overrides everything above.
+// A saved custom server (Settings on the landing screen) or ?peer=host:port:path
+// overrides the shared cloud entirely.
+function parsePeerSpec(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/^https?:\/\//, '');
+  const [host, port, path] = cleaned.split(':');
+  if (!host) return null;
+  const p = Number(port) || 443;
+  return {
+    label: 'custom (' + host + ')',
+    opts: { host, port: p, path: path || '/', secure: p === 443, debug: 1 }
+  };
+}
+
+function savedPeerSpec() {
+  try { return localStorage.getItem(PEER_STORAGE_KEY) || ''; } catch (e) { return ''; }
+}
+
 function signalCandidates() {
-  const raw = new URLSearchParams(location.search).get('peer');
-  if (raw) {
-    const [host, port, path] = raw.split(':');
-    return [{
-      label: 'custom (' + host + ')',
-      opts: { host, port: Number(port) || 443, path: path || '/', secure: (Number(port) || 443) === 443, debug: 2 }
-    }];
-  }
+  const fromUrl = parsePeerSpec(new URLSearchParams(location.search).get('peer'));
+  if (fromUrl) return [fromUrl];
+  const fromSaved = parsePeerSpec(savedPeerSpec());
+  if (fromSaved) return [fromSaved];
   return SIGNAL_CANDIDATES;
+}
+
+/* The shared broker throttles clients that register many peer IDs quickly.
+   Each retry is a fresh registration, so an eager retry loop is itself a cause
+   of "Lost connection to server" — this budget keeps us well under the line. */
+const REGISTRATION_BUDGET = 4;
+const BUDGET_WINDOW_MS = 60000;
+let registrationTimes = [];
+
+function budgetRemaining() {
+  const cutoff = Date.now() - BUDGET_WINDOW_MS;
+  registrationTimes = registrationTimes.filter(t => t > cutoff);
+  return REGISTRATION_BUDGET - registrationTimes.length;
+}
+
+function budgetCooldownSeconds() {
+  const cutoff = Date.now() - BUDGET_WINDOW_MS;
+  const oldest = registrationTimes.filter(t => t > cutoff)[0];
+  return oldest ? Math.ceil((oldest + BUDGET_WINDOW_MS - Date.now()) / 1000) : 0;
 }
 
 // PeerJS error types that are worth another attempt vs. genuinely terminal.
@@ -858,6 +946,7 @@ const CONTENT_BASE = 'content/';  // where optional content packs live, relative
 // in content/ fail to decode.
 const NAME_STORAGE_KEY = 'jury-room-preferred-name';
 const SOUND_STORAGE_KEY = 'jury-room-sound';
+const PEER_STORAGE_KEY = 'jury-room-signaling';
 const OUTCOME_SALT = 'jury-room-v1';   // see encodeOutcome — obfuscation, not security
 
 /* ============ SECTION: ROLES & WIN CONDITIONS ============
@@ -1166,30 +1255,90 @@ function saveNamePreference(name) {
    animation (for assertive lines); "flow" eases in gently (for measured
    ones). {defendant} and {evidence} are the only supported template slots.
 */
+/* ============ SECTION: QUICK CHAT — ROLE-FLAVORED PHRASE BANK ============
+   Each phrase: { text, style }. style "slam" plays a sharp, decisive
+   animation; "flow" eases in gently; "sarcasm" wobbles with a deflating
+   sound. Supported template slots: {defendant}, {evidence}, {target}.
+   A phrase containing {target} requires a juror to be selected first.
+*/
+const CHAT_CATEGORIES = [
+  { id: 'role',    label: 'In character' },
+  { id: 'press',   label: 'Press' },
+  { id: 'doubt',   label: 'Doubt' },
+  { id: 'back',    label: 'Back up' },
+  { id: 'accuse',  label: 'Accuse' },
+  { id: 'stall',   label: 'Stall' },
+  { id: 'react',   label: 'React' },
+  { id: 'close',   label: 'Close it' }
+];
+
 const CHAT_PHRASES = {
-  general: [
-    { text: "Let's look at {evidence} again.", style: 'flow' },
-    { text: "I'm not convinced yet.", style: 'flow' },
-    { text: "Can we hear from everyone before we vote?", style: 'flow' },
-    { text: "I think we're missing something here.", style: 'flow' },
-    { text: "{defendant} had every reason to do this.", style: 'slam' },
-    { text: "That doesn't add up to me.", style: 'slam' },
-    { text: "I've made up my mind.", style: 'slam' },
-    { text: "Give me one more minute.", style: 'flow' },
-    { text: "I'm ready to vote.", style: 'flow' },
-    { text: "Something about {evidence} bothers me.", style: 'flow' },
-    { text: "Oh, well, if you say so.", style: 'sarcasm' },
-    { text: "Sure. That's exactly how that works.", style: 'sarcasm' },
-    { text: "Fascinating theory. Any evidence for it?", style: 'sarcasm' },
-    { text: "Convenient, isn't it?", style: 'sarcasm' }
-  ],
+  categories: {
+    press: [
+      { text: "Let's go back to {evidence}.", style: 'flow' },
+      { text: "{target}, why are you so sure about that?", style: 'slam' },
+      { text: "{target}, walk me through your reasoning.", style: 'flow' },
+      { text: "Answer the question. Did {defendant} have the opportunity or not?", style: 'slam' },
+      { text: "Someone explain {evidence} to me, because it doesn't fit.", style: 'slam' },
+      { text: "We're talking around the actual issue here.", style: 'slam' }
+    ],
+    doubt: [
+      { text: "I'm not convinced yet.", style: 'flow' },
+      { text: "Something about {evidence} bothers me.", style: 'flow' },
+      { text: "That's an assumption, not a fact.", style: 'slam' },
+      { text: "I think we're missing something.", style: 'flow' },
+      { text: "Could there be another explanation for {evidence}?", style: 'flow' },
+      { text: "We only have one side of this story.", style: 'flow' }
+    ],
+    back: [
+      { text: "{target} is making sense to me.", style: 'flow' },
+      { text: "I'm with {target} on this.", style: 'flow' },
+      { text: "That's a fair point about {evidence}.", style: 'flow' },
+      { text: "{target}, say that again for the room.", style: 'slam' },
+      { text: "Agreed. Let's build on that.", style: 'flow' }
+    ],
+    accuse: [
+      { text: "{target}, you've been awfully quiet.", style: 'slam' },
+      { text: "{target} changed their story. Did anyone else catch that?", style: 'slam' },
+      { text: "{target}, whose side are you actually on?", style: 'slam' },
+      { text: "Someone in this room isn't here for the truth.", style: 'slam' },
+      { text: "{target} keeps steering us away from {evidence}.", style: 'slam' },
+      { text: "{target}, you decided before you sat down.", style: 'slam' }
+    ],
+    stall: [
+      { text: "Give me one more minute.", style: 'flow' },
+      { text: "I don't think we're ready to decide this.", style: 'flow' },
+      { text: "Can we hear from everyone before we vote?", style: 'flow' },
+      { text: "Let's go through the evidence one more time.", style: 'flow' },
+      { text: "What's the rush?", style: 'flow' }
+    ],
+    react: [
+      { text: "Oh, well, if you say so.", style: 'sarcasm' },
+      { text: "Sure. That's exactly how that works.", style: 'sarcasm' },
+      { text: "Fascinating theory. Any evidence for it?", style: 'sarcasm' },
+      { text: "Convenient, isn't it?", style: 'sarcasm' },
+      { text: "{target}, that's quite a leap.", style: 'sarcasm' },
+      { text: "That doesn't add up to me.", style: 'slam' },
+      { text: "Hm.", style: 'flow' }
+    ],
+    close: [
+      { text: "I've made up my mind.", style: 'slam' },
+      { text: "I'm ready to vote.", style: 'flow' },
+      { text: "{defendant} had every reason to do this.", style: 'slam' },
+      { text: "We have enough. Let's call it.", style: 'slam' },
+      { text: "I'm not moving on this. Vote around me.", style: 'slam' }
+    ]
+  },
+  // Legacy bucket: content packs that push to `general` still work and show
+  // up under "React" so nothing silently disappears.
+  general: [],
   roles: {
     truth_seeker: [
       { text: "Let's stick to what we can actually prove.", style: 'flow' },
       { text: "What does {evidence} really tell us?", style: 'flow' },
       { text: "I don't have an agenda here. I just want it right.", style: 'flow' },
       { text: "Show me the facts, not the feelings.", style: 'slam' },
-      { text: "I'll go where the evidence goes.", style: 'flow' }
+      { text: "{target}, I'll go where the evidence goes. Will you?", style: 'flow' }
     ],
     bought: [
       { text: "The prosecution hasn't proven anything to me.", style: 'slam' },
@@ -1226,7 +1375,7 @@ const CHAT_PHRASES = {
       { text: "Has anyone actually changed their mind, or are we just repeating ourselves?", style: 'flow' },
       { text: "I need more time before I commit to anything.", style: 'flow' },
       { text: "What's the rush? Let's talk it through more.", style: 'flow' },
-      { text: "I'm honestly torn. Convince me.", style: 'flow' }
+      { text: "I'm honestly torn. {target}, convince me.", style: 'flow' }
     ],
     last_word: [
       { text: "I'm listening.", style: 'flow' },
@@ -1294,6 +1443,12 @@ async function loadContentPacks() {
               if (CHAT_PHRASES.roles[roleId]) CHAT_PHRASES.roles[roleId].push(...data.roles[roleId]);
             });
           }
+          // Packs can also target a specific category (press, doubt, accuse…).
+          if (data.categories) {
+            Object.keys(data.categories).forEach(catId => {
+              if (CHAT_PHRASES.categories[catId]) CHAT_PHRASES.categories[catId].push(...data.categories[catId]);
+            });
+          }
         } catch (e) { console.warn('[jury] could not load phrase pack', path); }
       }
     }
@@ -1330,6 +1485,10 @@ const state = {
   lastTickSecond: null,
   retryJoinCode: null,
   roomOpened: false,
+  chatTarget: null,       // juror a message is addressed to, or null for the room
+  chatWhisper: false,
+  chatStyle: 'flow',
+  chatCategory: 'role',
   chatLog: []
 };
 let voteTimerInterval = null;
@@ -1475,7 +1634,10 @@ function createHostPeer(attempt, candidateIdx, forcedCode) {
   // who had already joined or been sent the link.
   const code = forcedCode || generateRoomCode();
   const peerId = ROOM_PREFIX + code;
-  log(`Opening room ${code} via ${candidate.label} (attempt ${attempt + 1})…`);
+
+  if (budgetRemaining() <= 0) { throttled('Too many connection attempts.'); return; }
+  registrationTimes.push(Date.now());
+  log(`Opening room ${code} via ${candidate.label} (attempt ${attempt + 1}, budget left ${budgetRemaining()})…`);
 
   let settled = false;
   let peer;
@@ -1575,10 +1737,17 @@ function nextRoomAttempt(attempt, candidateIdx, reason, code) {
   // Once a room has been announced, every retry must reuse its code.
   const keep = state.roomOpened ? (state.roomCode || code) : null;
 
-  if (attempt < 2) {
-    const wait = 2500 * Math.pow(2, attempt);
+  if (budgetRemaining() <= 0) {
+    throttled(reason);
+    return;
+  }
+
+  // One retry per server, with a long jittered wait. Hammering the shared
+  // broker is what gets a client throttled in the first place.
+  if (attempt < 1) {
+    const wait = 2500 + Math.random() * 1500;
     status.textContent = `${reason} Retrying in ${Math.round(wait / 1000)}s…`;
-    log(`Retrying in ${wait}ms`);
+    log(`Retrying in ${Math.round(wait)}ms (budget left: ${budgetRemaining()})`);
     setTimeout(() => createHostPeer(attempt + 1, candidateIdx, keep), wait);
     return;
   }
@@ -1589,6 +1758,15 @@ function nextRoomAttempt(attempt, candidateIdx, reason, code) {
     return;
   }
   roomFailed(reason);
+}
+
+function throttled(reason) {
+  const wait = budgetCooldownSeconds();
+  const status = document.getElementById('lobby-status');
+  status.textContent = `${reason} You've hit the free signaling server's rate limit — wait about ${wait}s before trying again, or set your own server under Settings.`;
+  status.classList.add('error');
+  document.getElementById('btn-retry-room').style.display = 'block';
+  log(`Throttled. Registration budget exhausted; cooldown ~${wait}s.`);
 }
 
 /* Signaling died on a room that is already live. Reconnect the same peer if we
@@ -1630,7 +1808,10 @@ function reviveRoom(err) {
 
 function roomFailed(reason) {
   const status = document.getElementById('lobby-status');
-  status.textContent = reason + ' The signaling server is free and shared, so it can be busy — retrying often works.';
+  const usingCustom = !!parsePeerSpec(new URLSearchParams(location.search).get('peer')) || !!parsePeerSpec(savedPeerSpec());
+  status.textContent = reason + (usingCustom
+    ? ' Check that your custom signaling server is running and reachable over https.'
+    : " The free shared broker rejects clients when it's busy. Waiting a minute usually clears it; running your own server (Settings) fixes it for good.");
   status.classList.add('error');
   document.getElementById('btn-retry-room').style.display = 'block';
   log('Room failed: ' + reason);
@@ -1705,9 +1886,18 @@ function handleHostMessage(conn, data) {
   } else if (data.type === 'chat') {
     const player = state.roster.find(p => p.id === conn.peer);
     const name = player ? player.name : 'Juror';
-    const msg = { from: conn.peer, name, text: String(data.text || '').slice(0, 200), style: ['slam', 'sarcasm'].includes(data.style) ? data.style : 'flow' };
-    appendChatMessage(msg);
-    sendToAll({ type: 'chat', ...msg });
+    const to = data.to && state.roster.some(p => p.id === data.to) ? data.to : null;
+    const toName = to ? (state.roster.find(p => p.id === to) || {}).name : null;
+    const msg = {
+      from: conn.peer, name,
+      text: String(data.text || '').slice(0, 240),
+      style: ['slam', 'sarcasm'].includes(data.style) ? data.style : 'flow',
+      to, toName, whisper: !!(data.whisper && to)
+    };
+    // The host only sees a whisper locally if it was aimed at them.
+    if (!msg.whisper || msg.to === 'host') appendChatMessage(msg);
+    relayChat(msg);
+    maybeProvokeBotReply(msg.to, msg.text);
   }
 }
 
@@ -1845,6 +2035,9 @@ function connectAsClient(code, attempt, candidateIdx) {
   const status = document.getElementById('lobby-status');
   log(`Joining ${code} via ${candidate.label} (attempt ${attempt + 1})…`);
 
+  if (budgetRemaining() <= 0) { throttled('Too many connection attempts.'); return; }
+  registrationTimes.push(Date.now());
+
   let settled = false;
   let peer;
   try {
@@ -1937,15 +2130,16 @@ function connectAsClient(code, attempt, candidateIdx) {
 function retryJoin(code, attempt, candidateIdx, reason) {
   const candidates = signalCandidates();
   const status = document.getElementById('lobby-status');
-  if (attempt < 2) {
-    const wait = 800 * Math.pow(2, attempt);
+  if (budgetRemaining() <= 0) { throttled(reason); return; }
+  if (attempt < 1) {
+    const wait = 2500 + Math.random() * 1500;
     status.textContent = `${reason} Retrying in ${Math.round(wait / 1000)}s…`;
     setTimeout(() => connectAsClient(code, attempt + 1, candidateIdx), wait);
     return;
   }
   if (candidateIdx + 1 < candidates.length) {
     status.textContent = `${reason} Trying another server…`;
-    setTimeout(() => connectAsClient(code, 0, candidateIdx + 1), 500);
+    setTimeout(() => connectAsClient(code, 0, candidateIdx + 1), 1200);
     return;
   }
   joinFailed(code, reason);
@@ -2743,7 +2937,8 @@ function renderChatPreview() {
     line.className = 'cp-line';
     const who = document.createElement('span');
     who.className = 'cp-who';
-    who.textContent = m.name + ': ';
+    const addressed = m.to ? ' \u2192 ' + (m.to === state.myId ? 'you' : (m.toName || '')) : '';
+    who.textContent = m.name + addressed + ': ';
     line.appendChild(who);
     line.appendChild(document.createTextNode(m.text));
     wrap.appendChild(line);
@@ -2769,41 +2964,147 @@ function setChatVisible(visible) {
   if (!visible) document.getElementById('chat-overlay').classList.remove('open');
 }
 
-function resolveDefendantToken(text) {
-  if (!text.includes('{defendant}')) return text;
+const CHAT_STYLES = [
+  { id: 'flow', label: 'Say' },
+  { id: 'slam', label: 'Slam' },
+  { id: 'sarcasm', label: 'Sneer' }
+];
+const CHAT_MIN_INTERVAL_MS = 1100;   // light rate limit so nobody can flood the feed
+let lastChatSentAt = 0;
+
+function resolveTokens(text) {
   const d = state.publicCase && state.publicCase.defendants[0];
-  return text.replace('{defendant}', d ? d.name : 'the defendant');
+  let out = text.replace('{defendant}', d ? d.name : 'the defendant');
+  const t = targetPlayer();
+  out = out.replace('{target}', t ? t.name : 'someone');
+  return out;
+}
+
+function targetPlayer() {
+  if (!state.chatTarget) return null;
+  return state.roster.find(p => p.id === state.chatTarget) || null;
+}
+
+/* --- addressing --- */
+function cycleChatTarget() {
+  // Everyone -> each other juror in turn -> back to Everyone.
+  const others = state.roster.filter(p => p.id !== state.myId);
+  if (!others.length) return;
+  const idx = others.findIndex(p => p.id === state.chatTarget);
+  state.chatTarget = idx === -1 ? others[0].id : (others[idx + 1] ? others[idx + 1].id : null);
+  if (!state.chatTarget) state.chatWhisper = false; // whispering to everyone makes no sense
+  renderComposeMeta();
+  renderChatPhrases();
+}
+
+function toggleWhisper() {
+  if (!state.chatTarget) {
+    showError('Pick a juror to whisper to first.');
+    return;
+  }
+  state.chatWhisper = !state.chatWhisper;
+  renderComposeMeta();
+}
+
+function cycleChatStyle() {
+  const i = CHAT_STYLES.findIndex(x => x.id === state.chatStyle);
+  state.chatStyle = CHAT_STYLES[(i + 1) % CHAT_STYLES.length].id;
+  renderComposeMeta();
+}
+
+function renderComposeMeta() {
+  const t = targetPlayer();
+  const tBtn = document.getElementById('btn-chat-target');
+  tBtn.textContent = t ? 'To: ' + t.name : 'To: Everyone';
+  tBtn.classList.toggle('on', !!t);
+
+  const wBtn = document.getElementById('btn-chat-whisper');
+  wBtn.textContent = state.chatWhisper ? 'Whisper: on' : 'Whisper: off';
+  wBtn.classList.toggle('whisper-on', state.chatWhisper);
+
+  const sBtn = document.getElementById('btn-chat-style');
+  const st = CHAT_STYLES.find(x => x.id === state.chatStyle) || CHAT_STYLES[0];
+  sBtn.textContent = st.label;
+  sBtn.classList.toggle('on', st.id !== 'flow');
+
+  const input = document.getElementById('chat-input');
+  input.placeholder = state.chatWhisper && t
+    ? `Whisper to ${t.name}…`
+    : t ? `Say something to ${t.name}…` : 'Say something to the jury…';
+}
+
+/* --- preset phrases, grouped into categories --- */
+function renderChatTabs() {
+  const wrap = document.getElementById('chat-tabs');
+  wrap.innerHTML = '';
+  CHAT_CATEGORIES.forEach(cat => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chat-tab' + (cat.id === state.chatCategory ? ' active' : '');
+    const role = ROLES[state.myRoleId];
+    btn.textContent = cat.id === 'role' && role ? 'As ' + role.name.replace(/^The /, '') : cat.label;
+    btn.onclick = () => {
+      state.chatCategory = cat.id;
+      document.getElementById('chat-evidence-picker').style.display = 'none';
+      renderChatTabs();
+      renderChatPhrases();
+      playSound('tap');
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function phrasesForCategory(catId) {
+  if (catId === 'role') return CHAT_PHRASES.roles[state.myRoleId] || [];
+  const base = CHAT_PHRASES.categories[catId] || [];
+  // Legacy/content-pack additions ride along under React.
+  return catId === 'react' ? base.concat(CHAT_PHRASES.general) : base;
 }
 
 function buildPhraseButton(phrase) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'chat-phrase-btn';
-  let preview = resolveDefendantToken(phrase.text);
+  let preview = resolveTokens(phrase.text);
   if (preview.includes('{evidence}')) preview = preview.replace('{evidence}', 'this evidence');
   btn.textContent = preview;
-  btn.onclick = () => handlePhraseTap(phrase);
+  const needsTarget = phrase.text.includes('{target}');
+  if (needsTarget && !state.chatTarget) {
+    btn.style.opacity = '.55';
+    btn.title = 'Pick a juror first';
+  }
+  btn.onclick = () => {
+    if (needsTarget && !state.chatTarget) {
+      showError('Tap "To: Everyone" to pick who you mean.');
+      return;
+    }
+    handlePhraseTap(phrase);
+  };
   return btn;
 }
 
 function renderChatPhrases() {
-  const mineWrap = document.getElementById('chat-phrases-mine');
-  const genWrap = document.getElementById('chat-phrases-general');
-  mineWrap.innerHTML = '';
-  genWrap.innerHTML = '';
-  const role = ROLES[state.myRoleId];
-  document.getElementById('chat-tab-mine').textContent = role ? 'As ' + role.name : 'In character';
-  (CHAT_PHRASES.roles[state.myRoleId] || []).forEach(p => mineWrap.appendChild(buildPhraseButton(p)));
-  CHAT_PHRASES.general.forEach(p => genWrap.appendChild(buildPhraseButton(p)));
+  renderChatTabs();
+  const wrap = document.getElementById('chat-phrases');
+  wrap.innerHTML = '';
+  const list = phrasesForCategory(state.chatCategory);
+  if (!list.length) {
+    const e = document.createElement('div');
+    e.className = 'chat-empty';
+    e.textContent = 'Nothing here yet.';
+    wrap.appendChild(e);
+    return;
+  }
+  list.forEach(p => wrap.appendChild(buildPhraseButton(p)));
 }
 
 function handlePhraseTap(phrase) {
-  let text = resolveDefendantToken(phrase.text);
+  let text = resolveTokens(phrase.text);
   if (text.includes('{evidence}')) {
     showEvidencePicker(phrase, text);
     return;
   }
-  sendChatPhrase(text, phrase.style);
+  sendChat(text, phrase.style);
 }
 
 function showEvidencePicker(phrase, textTemplate) {
@@ -2822,20 +3123,97 @@ function showEvidencePicker(phrase, textTemplate) {
     chip.onclick = () => {
       const finalText = textTemplate.replace('{evidence}', (e.title || 'that evidence').toLowerCase());
       wrap.style.display = 'none';
-      sendChatPhrase(finalText, phrase.style);
+      sendChat(finalText, phrase.style);
     };
     wrap.appendChild(chip);
   });
 }
 
-function sendChatPhrase(text, style) {
-  if (state.isHost) {
-    const msg = { from: state.myId, name: state.myName, text, style };
-    appendChatMessage(msg);
-    sendToAll({ type: 'chat', ...msg });
-  } else if (state.hostConn && state.hostConn.open) {
-    state.hostConn.send({ type: 'chat', text, style });
+/* --- sending --- */
+function sendCustomChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (sendChat(text, state.chatStyle)) {
+    input.value = '';
+    document.getElementById('chat-count').textContent = '0';
   }
+}
+
+// Returns true if the message went out.
+function sendChat(text, style) {
+  const now = Date.now();
+  if (now - lastChatSentAt < CHAT_MIN_INTERVAL_MS) {
+    showError('Easy — one at a time.');
+    return false;
+  }
+  lastChatSentAt = now;
+
+  const clean = String(text).slice(0, 240);
+  const target = state.chatTarget || null;
+  const whisper = !!(state.chatWhisper && target);
+  const targetName = target ? (state.roster.find(p => p.id === target) || {}).name : null;
+
+  if (state.isHost) {
+    const msg = { from: state.myId, name: state.myName, text: clean, style, to: target, toName: targetName, whisper };
+    appendChatMessage(msg);
+    relayChat(msg);
+  } else if (state.hostConn && state.hostConn.open) {
+    state.hostConn.send({ type: 'chat', text: clean, style, to: target, whisper });
+  } else {
+    showError('Not connected to the room.');
+    return false;
+  }
+
+  // Whispering is a one-shot action; drop back to open discussion after.
+  if (whisper) {
+    state.chatWhisper = false;
+    renderComposeMeta();
+  }
+  maybeProvokeBotReply(target, clean);
+  return true;
+}
+
+/* Host fans a message out. A whisper reaches only its target (plus the sender,
+   who already has it locally); everything else goes to the whole room.
+   Worth knowing: the host relays every message, so a whisper is private from
+   the other players but not from whoever is hosting. */
+function relayChat(msg) {
+  if (!state.isHost) return;
+  const payload = { type: 'chat', from: msg.from, name: msg.name, text: msg.text, style: msg.style, to: msg.to, toName: msg.toName, whisper: msg.whisper };
+  if (msg.whisper) {
+    if (msg.to && msg.to !== 'host') {
+      const conn = state.connections.get(msg.to);
+      if (conn && conn.open) conn.send(payload);
+    }
+    if (msg.from !== 'host' && msg.from !== msg.to) {
+      const back = state.connections.get(msg.from);
+      if (back && back.open) back.send(payload);
+    }
+    return;
+  }
+  state.connections.forEach(conn => { if (conn.open) conn.send(payload); });
+}
+
+// A bot that gets addressed directly answers back, which makes the AI seats
+// feel like they're in the conversation rather than talking past you.
+function maybeProvokeBotReply(targetId, incomingText) {
+  if (!state.isHost || !targetId) return;
+  const bot = state.roster.find(p => p.id === targetId && p.isBot);
+  if (!bot) return;
+  const roleId = state.roleAssignment[bot.id];
+  const pool = (CHAT_PHRASES.roles[roleId] || []).concat(CHAT_PHRASES.categories.doubt, CHAT_PHRASES.categories.react);
+  if (!pool.length) return;
+  botChatTimers.push(setTimeout(() => {
+    const phrase = pool[Math.floor(Math.random() * pool.length)];
+    let text = phrase.text
+      .replace('{defendant}', (state.publicCase && state.publicCase.defendants[0].name) || 'the defendant')
+      .replace('{target}', state.myName)
+      .replace('{evidence}', 'the evidence');
+    const msg = { from: bot.id, name: bot.name, text, style: phrase.style, to: state.myId, toName: state.myName, whisper: false };
+    appendChatMessage(msg);
+    relayChat(msg);
+  }, 1400 + Math.random() * 2600));
 }
 
 function appendChatMessage(msg) {
@@ -2847,15 +3225,26 @@ function appendChatMessage(msg) {
   const mine = msg.from === state.myId;
   const styleClass = msg.style === 'slam' ? 'slam' : msg.style === 'sarcasm' ? 'sarcasm flow' : 'flow';
   const el = document.createElement('div');
-  el.className = 'chat-msg ' + styleClass + (mine ? ' me' : '');
+  el.className = 'chat-msg ' + styleClass + (mine ? ' me' : '') + (msg.whisper ? ' whisper' : '');
+
   const nameEl = document.createElement('div');
   nameEl.className = 'chat-msg-name';
   nameEl.textContent = mine ? 'You' : msg.name;
+  el.appendChild(nameEl);
+
+  if (msg.to) {
+    const toEl = document.createElement('div');
+    toEl.className = 'chat-msg-to';
+    const who = msg.to === state.myId ? 'you' : (msg.toName || 'someone');
+    toEl.textContent = (msg.whisper ? '\u2192 whispered to ' : '\u2192 ') + who;
+    el.appendChild(toEl);
+  }
+
   const textEl = document.createElement('div');
   textEl.className = 'chat-msg-text';
-  textEl.textContent = msg.text;
-  el.appendChild(nameEl);
+  textEl.textContent = msg.text; // textContent, never innerHTML — this is free text now
   el.appendChild(textEl);
+
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
 
@@ -2881,6 +3270,10 @@ function appendChatMessage(msg) {
     void fab.offsetWidth;
     fab.classList.add('pulse');
   }
+  // Being addressed directly deserves more than a silent badge.
+  if (!open && msg.to === state.myId) {
+    showToast((msg.whisper ? msg.name + ' whispered to you' : msg.name + ' is talking to you'), 'info');
+  }
 }
 
 function clearChatUnread() {
@@ -2893,6 +3286,7 @@ function clearChatUnread() {
 function openChat() {
   document.getElementById('chat-overlay').classList.add('open');
   clearChatUnread();
+  renderComposeMeta();
   renderChatPhrases();
 }
 
@@ -3265,6 +3659,9 @@ function returnToLobby() {
   state.publicCase = null;
   state.myPersonalEvidence = [];
   state.chatLog = [];
+  state.chatTarget = null;
+  state.chatWhisper = false;
+  state.chatCategory = 'role';
   resetChatUI();
   document.getElementById('btn-copy-sealed').style.display = 'none';
   document.getElementById('case-status').textContent = 'No case loaded yet.';
@@ -3492,19 +3889,36 @@ document.getElementById('btn-results-leave').onclick = leaveRoom;
 document.getElementById('btn-chat-open').onclick = openChat;
 document.getElementById('btn-delib-chat').onclick = openChat;
 wireRoleChips();
+
+document.getElementById('btn-chat-target').onclick = cycleChatTarget;
+document.getElementById('btn-chat-whisper').onclick = toggleWhisper;
+document.getElementById('btn-chat-style').onclick = cycleChatStyle;
+document.getElementById('btn-chat-send').onclick = sendCustomChat;
+
+const chatInput = document.getElementById('chat-input');
+chatInput.addEventListener('input', () => {
+  document.getElementById('chat-count').textContent = String(chatInput.value.length);
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 96) + 'px';
+});
+chatInput.addEventListener('keydown', e => {
+  // Enter sends; Shift+Enter makes a new line.
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendCustomChat(); }
+});
+
+document.getElementById('btn-save-peer').onclick = () => {
+  const val = document.getElementById('cfg-peer').value.trim();
+  try {
+    if (val) localStorage.setItem(PEER_STORAGE_KEY, val);
+    else localStorage.removeItem(PEER_STORAGE_KEY);
+  } catch (e) { /* ignore */ }
+  registrationTimes = []; // a new server gets a fresh budget
+  showToast(val ? 'Signaling server saved.' : 'Back to the shared PeerJS cloud.', 'info');
+};
 document.getElementById('btn-chat-close').onclick = () => {
   document.getElementById('chat-overlay').classList.remove('open');
 };
-document.querySelectorAll('.chat-tab').forEach(tab => {
-  tab.onclick = () => {
-    document.querySelectorAll('.chat-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    const which = tab.dataset.tab;
-    document.getElementById('chat-phrases-mine').style.display = which === 'mine' ? 'flex' : 'none';
-    document.getElementById('chat-phrases-general').style.display = which === 'general' ? 'flex' : 'none';
-    document.getElementById('chat-evidence-picker').style.display = 'none';
-  };
-});
+
 
 /* ============ SECTION: INIT ============ */
 function applyIncomingRoomCode(raw) {
@@ -3531,6 +3945,7 @@ document.addEventListener('pointerdown', function warm() {
 }, { once: true });
 
 loadSoundPreference();
+document.getElementById('cfg-peer').value = savedPeerSpec();
 document.getElementById('input-name').value = getInitialName();
 
 (function initFromURL() {
