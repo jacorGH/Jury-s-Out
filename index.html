@@ -1576,7 +1576,7 @@ function nextRoomAttempt(attempt, candidateIdx, reason, code) {
   const keep = state.roomOpened ? (state.roomCode || code) : null;
 
   if (attempt < 2) {
-    const wait = 800 * Math.pow(2, attempt);
+    const wait = 2500 * Math.pow(2, attempt);
     status.textContent = `${reason} Retrying in ${Math.round(wait / 1000)}s…`;
     log(`Retrying in ${wait}ms`);
     setTimeout(() => createHostPeer(attempt + 1, candidateIdx, keep), wait);
@@ -1585,7 +1585,7 @@ function nextRoomAttempt(attempt, candidateIdx, reason, code) {
   if (candidateIdx + 1 < candidates.length) {
     status.textContent = `${reason} Trying another server…`;
     log('Falling back to next signaling candidate.');
-    setTimeout(() => createHostPeer(0, candidateIdx + 1, keep), 500);
+    setTimeout(() => createHostPeer(0, candidateIdx + 1, keep), 1200);
     return;
   }
   roomFailed(reason);
