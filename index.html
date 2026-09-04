@@ -4,11 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1A1D24">
-<title>The Jury Room</title>
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<!-- Lets iOS run it chromeless once added to the home screen. -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jury's Out">
+<title>Jury's Out</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="icon" href="icon.png">
-<link rel="apple-touch-icon" href="icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -416,7 +422,7 @@
 
 <!-- ============ SCREEN: LANDING ============ -->
 <div class="screen active" id="screen-landing">
-  <h1>The Jury Room</h1>
+  <h1>Jury&rsquo;s Out</h1>
   <p class="subhead">Twelve strangers, one case. Everyone in the room has their own reason to vote the way they do.</p>
 
   <div class="field">
@@ -451,6 +457,7 @@
   <button class="btn btn-secondary" id="btn-share" style="display:none;">Share invite link</button>
 
   <p class="status" id="lobby-status">Connecting…</p>
+  <button class="btn btn-secondary" id="btn-retry-room" style="display:none;">Try again</button>
 
   <div class="sec-head">Jury (<span id="roster-count">0</span>/<span id="roster-max">8</span>)</div>
   <ul class="roster" id="roster-list">
@@ -703,7 +710,7 @@
 <button class="chat-fab" id="btn-chat-open" style="display:none;"><span>Jury chat</span><span class="fab-dot" id="chat-fab-dot"></span></button>
 <div class="chat-overlay" id="chat-overlay">
   <div class="chat-panel">
-    <div class="chat-header"><span>Jury room</span><button class="chat-close" id="btn-chat-close">Close</button></div>
+    <div class="chat-header"><span>The jury</span><button class="chat-close" id="btn-chat-close">Close</button></div>
     <div class="chat-feed" id="chat-feed"><div class="chat-empty" id="chat-empty">The room is quiet.<br>Pick a line below to make your case.</div></div>
     <div class="chat-picker">
       <div class="chat-tabs">
@@ -724,12 +731,116 @@
 'use strict';
 
 /* ============ SECTION: CONFIG ============ */
-const ROOM_PREFIX = 'jury-room-';
+const ROOM_PREFIX = 'jurys-out-';
 const MIN_PLAYERS = 4;
 const MAX_PLAYERS = 8;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
-const PEER_OPTIONS = { debug: 1 };
+/* ============ SECTION: ICE / NAT TRAVERSAL ============
+   STUN alone lets two peers find each other only when at least one side's NAT
+   is permissive. Phones on mobile data are usually behind carrier-grade NAT,
+   where no direct path exists at all and the connection dies with
+   "negotiation-failed" — which is exactly why an Android on cellular fails
+   while two iPhones on the same wifi work fine. The only fix is a TURN relay.
+
+   TURN_SERVERS below uses the Open Relay public test service so cellular has
+   a chance of working out of the box. It is a shared free service: treat it as
+   best-effort, not reliable. For anything you actually care about, get your own
+   (Cloudflare and Metered both have free tiers, or self-host coturn) and put
+   the credentials here — or pass ?turn=url|user|credential for a quick test.
+*/
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:global.stun.twilio.com:3478' }
+];
+
+const TURN_SERVERS = [
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+];
+
+function iceServers() {
+  const raw = new URLSearchParams(location.search).get('turn');
+  if (raw) {
+    const [urls, username, credential] = raw.split('|');
+    return STUN_SERVERS.concat([{ urls, username, credential }]);
+  }
+  return STUN_SERVERS.concat(TURN_SERVERS);
+}
+
+function withIce(opts) {
+  return Object.assign({}, opts, {
+    config: {
+      iceServers: iceServers(),
+      // Gather relay candidates alongside direct ones rather than only after
+      // direct fails, so a cellular peer doesn't time out first.
+      iceCandidatePoolSize: 4
+    }
+  });
+}
+
+// Signaling configs, tried in order. The first is PeerJS's free cloud broker,
+// which is the default and is occasionally overloaded or rate-limited — that
+// is the single most common reason a room fails to open. Append your own
+// PeerServer here (or pass ?peer=host:port:path in the URL) for reliability.
+const SIGNAL_CANDIDATES = [
+  { label: 'PeerJS cloud', opts: { debug: 1 } },
+  { label: 'PeerJS cloud (explicit)', opts: { host: '0.peerjs.com', port: 443, secure: true, path: '/', debug: 1 } }
+];
+
+// ?peer=my-server.example.com:443:/ overrides everything above.
+function signalCandidates() {
+  const raw = new URLSearchParams(location.search).get('peer');
+  if (raw) {
+    const [host, port, path] = raw.split(':');
+    return [{
+      label: 'custom (' + host + ')',
+      opts: { host, port: Number(port) || 443, path: path || '/', secure: (Number(port) || 443) === 443, debug: 2 }
+    }];
+  }
+  return SIGNAL_CANDIDATES;
+}
+
+// PeerJS error types that are worth another attempt vs. genuinely terminal.
+const RETRYABLE_PEER_ERRORS = ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'];
+
+function describePeerError(err) {
+  const t = err && err.type;
+  const map = {
+    'browser-incompatible': "This browser doesn't support the WebRTC features the game needs. Try Chrome, Safari or Firefox.",
+    'invalid-id': 'That room code contains characters the signaling server rejects.',
+    'invalid-key': 'The signaling server rejected the API key.',
+    'ssl-unavailable': 'The signaling server refused a secure connection.',
+    'network': 'Lost contact with the signaling server.',
+    'server-error': 'The signaling server returned an error — it may be overloaded.',
+    'socket-error': 'The connection to the signaling server failed.',
+    'socket-closed': 'The signaling server closed the connection.',
+    'unavailable-id': 'That room code is already taken.',
+    'webrtc': 'A WebRTC connection error occurred.'
+  };
+  return (map[t] || 'Unexpected signaling error.') + (t ? ' (' + t + ')' : '');
+}
+
+// Logged up front so a failure report has something to go on. Opening the file
+// straight off disk is a common cause: from a file:// origin browsers block the
+// secure WebSocket the broker needs.
+function checkEnvironment() {
+  log('protocol: ' + location.protocol + ' | host: ' + (location.host || '(none)'));
+  log('RTCPeerConnection: ' + (typeof RTCPeerConnection !== 'undefined'));
+  log('WebSocket: ' + (typeof WebSocket !== 'undefined'));
+  log('PeerJS loaded: ' + (typeof Peer !== 'undefined'));
+  if (location.protocol === 'file:') {
+    log('WARNING: file:// origin — the signaling server will likely refuse this.');
+    return 'Opening the file directly from disk blocks the connection the game needs. Serve it over http (for example `npx serve`) or push it to GitHub Pages.';
+  }
+  if (typeof Peer === 'undefined') {
+    return "The PeerJS library didn't load. Check that you're online and that unpkg.com isn't blocked.";
+  }
+  return null;
+}
 const VOTE_SECONDS = 90;          // tunable: how long the room gets to vote before contempt kicks in
 const DELIBERATION_SECONDS = 300; // tunable: informational only — host still controls when to call the vote
 // A real jury needs unanimity, which makes this game nearly unwinnable: two
@@ -741,6 +852,10 @@ const VERDICT_RATIO = 0.6;
 const BOT_CHAT_MIN_MS = 3500;     // bots chime in during deliberation on staggered timers
 const BOT_CHAT_MAX_MS = 11000;
 const CONTENT_BASE = 'content/';  // where optional content packs live, relative to index.html
+// These three keep their original values on purpose, despite the rename.
+// Changing the storage keys would wipe everyone's saved name and sound
+// preference, and changing the salt would make every already-sealed case file
+// in content/ fail to decode.
 const NAME_STORAGE_KEY = 'jury-room-preferred-name';
 const SOUND_STORAGE_KEY = 'jury-room-sound';
 const OUTCOME_SALT = 'jury-room-v1';   // see encodeOutcome — obfuscation, not security
@@ -1213,6 +1328,8 @@ const state = {
   lastSplits: {},        // (host only) defendantId -> {guilty, notGuilty, cast} from the last tally
   voteDeadline: null,
   lastTickSecond: null,
+  retryJoinCode: null,
+  roomOpened: false,
   chatLog: []
 };
 let voteTimerInterval = null;
@@ -1320,6 +1437,12 @@ function broadcastRoster() {
 
 /* ============ SECTION: HOST NETWORKING ============ */
 function hostGame() {
+  // Re-tapping "Start a trial" while a room is already open used to spawn a
+  // second peer and a second room code, stranding anyone already in the lobby.
+  if (state.isHost && state.roomCode && state.peer && !state.peer.destroyed) {
+    showScreen('screen-lobby');
+    return;
+  }
   const name = getNameOrPrompt();
   if (!name) return;
   state.isHost = true;
@@ -1331,21 +1454,59 @@ function hostGame() {
   document.getElementById('lobby-tag').style.display = 'block';
   document.getElementById('host-controls').style.display = 'block';
   document.getElementById('lobby-status').textContent = 'Opening room…';
+  document.getElementById('lobby-status').classList.remove('error');
+  document.getElementById('btn-retry-room').style.display = 'none';
   renderRoster();
 
-  createHostPeer(0);
+  const envProblem = checkEnvironment();
+  if (envProblem) { roomFailed(envProblem); return; }
+
+  createHostPeer(0, 0);
 }
 
-function createHostPeer(attempt) {
-  const code = generateRoomCode();
+function createHostPeer(attempt, candidateIdx, forcedCode) {
+  attempt = attempt || 0;
+  candidateIdx = candidateIdx || 0;
+  const candidates = signalCandidates();
+  const candidate = candidates[Math.min(candidateIdx, candidates.length - 1)];
+
+  // forcedCode re-opens an existing room on its original code. Losing
+  // signaling used to mint a fresh code, which silently orphaned every player
+  // who had already joined or been sent the link.
+  const code = forcedCode || generateRoomCode();
   const peerId = ROOM_PREFIX + code;
-  const peer = new Peer(peerId, PEER_OPTIONS);
+  log(`Opening room ${code} via ${candidate.label} (attempt ${attempt + 1})…`);
+
+  let settled = false;
+  let peer;
+  try {
+    peer = new Peer(peerId, withIce(candidate.opts));
+  } catch (e) {
+    roomFailed('Could not start the connection: ' + e.message);
+    return;
+  }
   state.peer = peer;
 
+  // The broker sometimes accepts the socket and then never responds, which
+  // leaves the UI stuck on "Opening room…" forever. Fail it ourselves.
+  const watchdog = setTimeout(() => {
+    if (settled) return;
+    log('Timed out waiting for the signaling server.');
+    settled = true;
+    try { peer.destroy(); } catch (e) { /* ignore */ }
+    nextRoomAttempt(attempt, candidateIdx, 'Timed out reaching the server.', code);
+  }, 12000);
+
   peer.on('open', () => {
+    settled = true;
+    clearTimeout(watchdog);
     state.roomCode = code;
+    state.roomOpened = true;
+    startKeepalive();
     document.getElementById('lobby-code').textContent = code;
     document.getElementById('lobby-status').textContent = 'Waiting for players to join…';
+    document.getElementById('lobby-status').classList.remove('error');
+    document.getElementById('btn-retry-room').style.display = 'none';
     document.getElementById('btn-share').style.display = 'block';
     setupCopyCode(code);
     log(`Room open as ${peerId}`);
@@ -1360,16 +1521,119 @@ function createHostPeer(attempt) {
 
   peer.on('connection', conn => handleIncomingConnection(conn));
 
-  peer.on('error', err => {
-    log('Host peer error: ' + err.type);
-    if (err.type === 'unavailable-id' && attempt < 5) {
-      peer.destroy();
-      createHostPeer(attempt + 1);
-    } else {
-      document.getElementById('lobby-status').textContent = 'Could not open a room. Check your connection and try again.';
-      document.getElementById('lobby-status').classList.add('error');
-    }
+  peer.on('disconnected', () => {
+    // Signaling dropped but the peer object may still be usable. Reviving keeps
+    // the existing room code alive rather than dumping everyone out.
+    log('Signaling disconnected.');
+    if (state.roomOpened) reviveRoom(null);
   });
+
+  peer.on('error', err => {
+    log('Host peer error: ' + err.type + (err.message ? ' — ' + err.message : ''));
+
+    if (err.type === 'unavailable-id') {
+      // Room code collision on the shared broker; just pick another.
+      if (attempt < 6) {
+        settled = true;
+        clearTimeout(watchdog);
+        try { peer.destroy(); } catch (e) { /* ignore */ }
+        createHostPeer(attempt + 1, candidateIdx);
+      } else {
+        settled = true;
+        clearTimeout(watchdog);
+        roomFailed('Kept hitting taken room codes. Try again in a moment.');
+      }
+      return;
+    }
+
+    if (RETRYABLE_PEER_ERRORS.includes(err.type)) {
+      clearTimeout(watchdog);
+      if (state.roomOpened) {
+        // The room exists and people may be in it — revive this same code
+        // rather than starting over with a new one.
+        reviveRoom(err);
+        return;
+      }
+      if (settled) return;
+      settled = true;
+      try { peer.destroy(); } catch (e) { /* ignore */ }
+      nextRoomAttempt(attempt, candidateIdx, describePeerError(err), code);
+      return;
+    }
+
+    settled = true;
+    clearTimeout(watchdog);
+    roomFailed(describePeerError(err));
+  });
+}
+
+// Retries the same broker a couple of times with backoff, then falls through
+// to the next configured signaling server before giving up.
+function nextRoomAttempt(attempt, candidateIdx, reason, code) {
+  const candidates = signalCandidates();
+  const status = document.getElementById('lobby-status');
+  // Once a room has been announced, every retry must reuse its code.
+  const keep = state.roomOpened ? (state.roomCode || code) : null;
+
+  if (attempt < 2) {
+    const wait = 800 * Math.pow(2, attempt);
+    status.textContent = `${reason} Retrying in ${Math.round(wait / 1000)}s…`;
+    log(`Retrying in ${wait}ms`);
+    setTimeout(() => createHostPeer(attempt + 1, candidateIdx, keep), wait);
+    return;
+  }
+  if (candidateIdx + 1 < candidates.length) {
+    status.textContent = `${reason} Trying another server…`;
+    log('Falling back to next signaling candidate.');
+    setTimeout(() => createHostPeer(0, candidateIdx + 1, keep), 500);
+    return;
+  }
+  roomFailed(reason);
+}
+
+/* Signaling died on a room that is already live. Reconnect the same peer if we
+   can, otherwise re-open on the identical room code, so existing players and
+   any shared link stay valid. This is what makes it safe to leave the app to
+   fetch case JSON and come back. */
+let reviveTimer = null;
+function reviveRoom(err) {
+  const status = document.getElementById('lobby-status');
+  const peer = state.peer;
+  const code = state.roomCode;
+  clearTimeout(reviveTimer);
+
+  status.textContent = 'Reconnecting to the server… your room code has not changed.';
+  status.classList.remove('error');
+  log('Reviving room ' + code + (err ? ' after ' + err.type : ''));
+
+  if (peer && !peer.destroyed && peer.disconnected) {
+    try {
+      peer.reconnect();
+      reviveTimer = setTimeout(() => {
+        if (state.peer && state.peer.open) {
+          status.textContent = `Room ${code} is back. Waiting for players…`;
+          log('Reconnected, same room code.');
+        } else {
+          log('reconnect() did not take — re-opening on the same code.');
+          try { state.peer.destroy(); } catch (e) { /* ignore */ }
+          createHostPeer(0, 0, code);
+        }
+      }, 3500);
+      return;
+    } catch (e) {
+      log('reconnect threw: ' + e.message);
+    }
+  }
+  try { if (peer) peer.destroy(); } catch (e) { /* ignore */ }
+  createHostPeer(0, 0, code);
+}
+
+function roomFailed(reason) {
+  const status = document.getElementById('lobby-status');
+  status.textContent = reason + ' The signaling server is free and shared, so it can be busy — retrying often works.';
+  status.classList.add('error');
+  document.getElementById('btn-retry-room').style.display = 'block';
+  log('Room failed: ' + reason);
 }
 
 function setupCopyCode(code) {
@@ -1393,7 +1657,7 @@ async function shareInvite() {
   const link = inviteLink();
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'Join my trial — The Jury Room', text: `Join my jury. Room code: ${state.roomCode}`, url: link });
+      await navigator.share({ title: "Join my trial — Jury's Out", text: `Join my jury. Room code: ${state.roomCode}`, url: link });
     } catch (err) {
       if (err.name !== 'AbortError') showError("Couldn't open the share sheet — try again.");
     }
@@ -1433,6 +1697,11 @@ function handleHostMessage(conn, data) {
     document.getElementById('lobby-status').textContent = `${state.roster.length} in the room.`;
   } else if (data.type === 'vote') {
     recordVote(conn.peer, data.votes);
+  } else if (data.type === 'ping') {
+    try { conn.send({ type: 'pong' }); } catch (e) { /* ignore */ }
+    return;
+  } else if (data.type === 'pong') {
+    return;
   } else if (data.type === 'chat') {
     const player = state.roster.find(p => p.id === conn.peer);
     const name = player ? player.name : 'Juror';
@@ -1455,6 +1724,53 @@ function handleClientLeft(peerId) {
 function sendToAll(msg) {
   state.connections.forEach(conn => { if (conn.open) conn.send(msg); });
 }
+
+/* ============ SECTION: CONNECTION KEEPALIVE ============
+   Two problems this solves. Mobile browsers suspend a backgrounded tab, which
+   silently kills the signaling socket and any idle data channels — so leaving
+   the app to copy case JSON out of ChatGPT would kill the room. And idle
+   WebRTC data channels get reaped by some carrier NATs regardless.
+*/
+let keepaliveTimer = null;
+
+function startKeepalive() {
+  stopKeepalive();
+  keepaliveTimer = setInterval(() => {
+    if (state.isHost) {
+      state.connections.forEach(conn => {
+        if (conn.open) { try { conn.send({ type: 'ping', t: Date.now() }); } catch (e) { /* ignore */ } }
+      });
+    } else if (state.hostConn && state.hostConn.open) {
+      try { state.hostConn.send({ type: 'ping', t: Date.now() }); } catch (e) { /* ignore */ }
+    }
+  }, 12000);
+}
+
+function stopKeepalive() {
+  clearInterval(keepaliveTimer);
+  keepaliveTimer = null;
+}
+
+// Coming back from the background is the moment to check whether we still have
+// a server connection, since nothing fires reliably while suspended.
+function handleReturnToForeground() {
+  if (document.visibilityState !== 'visible') return;
+  const peer = state.peer;
+  if (!peer || peer.destroyed) return;
+  if (peer.disconnected) {
+    log('Returned to foreground with signaling down.');
+    if (state.isHost && state.roomOpened) reviveRoom(null);
+    else if (!state.isHost && state.retryJoinCode) {
+      try { peer.reconnect(); } catch (e) { log('client reconnect failed: ' + e.message); }
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', handleReturnToForeground);
+window.addEventListener('online', () => {
+  log('Network came back online.');
+  handleReturnToForeground();
+});
 
 /* ============ SECTION: BOTS (local, single-player "cup" seats) ============ */
 let botCounter = 0;
@@ -1517,43 +1833,144 @@ function joinGame(code) {
   document.getElementById('lobby-status').textContent = 'Connecting…';
   renderRoster();
 
-  const peer = new Peer(PEER_OPTIONS);
+  const envProblem = checkEnvironment();
+  if (envProblem) { roomFailed(envProblem); return; }
+
+  connectAsClient(code, 0, 0);
+}
+
+function connectAsClient(code, attempt, candidateIdx) {
+  const candidates = signalCandidates();
+  const candidate = candidates[Math.min(candidateIdx, candidates.length - 1)];
+  const status = document.getElementById('lobby-status');
+  log(`Joining ${code} via ${candidate.label} (attempt ${attempt + 1})…`);
+
+  let settled = false;
+  let peer;
+  try {
+    peer = new Peer(withIce(candidate.opts));
+  } catch (e) {
+    joinFailed(code, 'Could not start the connection: ' + e.message);
+    return;
+  }
   state.peer = peer;
 
+  const watchdog = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    log('Timed out reaching the signaling server.');
+    try { peer.destroy(); } catch (e) { /* ignore */ }
+    retryJoin(code, attempt, candidateIdx, 'Timed out reaching the server.');
+  }, 12000);
+
   peer.on('open', () => {
+    clearTimeout(watchdog);
     const hostId = ROOM_PREFIX + code.toUpperCase();
-    const conn = peer.connect(hostId, { metadata: { name }, reliable: true });
+    const conn = peer.connect(hostId, { metadata: { name: state.myName }, reliable: true });
     state.hostConn = conn;
 
     conn.on('open', () => {
+      settled = true;
       log('Connected to host, sending join…');
-      conn.send({ type: 'join', name });
+      status.classList.remove('error');
+      document.getElementById('btn-retry-room').style.display = 'none';
+      state.retryJoinCode = code;
+      startKeepalive();
+      conn.send({ type: 'join', name: state.myName });
     });
     conn.on('data', data => handleClientMessage(data));
     conn.on('close', () => {
-      document.getElementById('lobby-status').textContent = 'Lost connection to the host. Rejoin with the code to continue.';
-      document.getElementById('lobby-status').classList.add('error');
+      status.textContent = 'Lost connection to the host. Rejoin with the code to continue.';
+      status.classList.add('error');
+      document.getElementById('btn-retry-room').style.display = 'block';
     });
     conn.on('error', err => {
-      log('Connection error: ' + err.type);
+      log('Connection error: ' + err.type + (err.message ? ' — ' + err.message : ''));
+      if (err.type === 'negotiation-failed' || err.type === 'connection-closed') {
+        // No direct network path between the two devices. Common on mobile
+        // data behind carrier-grade NAT; only a TURN relay gets through.
+        if (attempt < 2) {
+          log('Negotiation failed — retrying with relay candidates.');
+          settled = true;
+          try { peer.destroy(); } catch (e) { /* ignore */ }
+          retryJoin(code, attempt + 1, candidateIdx, 'Could not find a route to the host.');
+          return;
+        }
+        joinFailed(code, "Reached the server but couldn't open a direct route to the host. This is usually mobile data behind carrier NAT — try wifi, or the host can add a TURN relay. (negotiation-failed)");
+        return;
+      }
       showError("Couldn't reach that room. Check the code and try again.");
     });
   });
 
-  peer.on('error', err => {
-    log('Client peer error: ' + err.type);
-    if (err.type === 'peer-unavailable') {
-      showError("That room code doesn't exist.");
-      showScreen('screen-landing');
-    } else {
-      showError('Connection problem. Check your network and try again.');
+  peer.on('disconnected', () => {
+    log('Signaling disconnected — attempting reconnect.');
+    if (!peer.destroyed) {
+      try { peer.reconnect(); } catch (e) { log('reconnect failed: ' + e.message); }
     }
   });
+
+  peer.on('error', err => {
+    log('Client peer error: ' + err.type + (err.message ? ' — ' + err.message : ''));
+
+    if (err.type === 'peer-unavailable') {
+      // No host is listening on that code — a wrong code, or the host closed.
+      settled = true;
+      clearTimeout(watchdog);
+      joinFailed(code, 'No open room with code ' + code.toUpperCase() + '. Check the code, and make sure the host still has the app open.');
+      return;
+    }
+    if (RETRYABLE_PEER_ERRORS.includes(err.type)) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      try { peer.destroy(); } catch (e) { /* ignore */ }
+      retryJoin(code, attempt, candidateIdx, describePeerError(err));
+      return;
+    }
+    settled = true;
+    clearTimeout(watchdog);
+    joinFailed(code, describePeerError(err));
+  });
+}
+
+function retryJoin(code, attempt, candidateIdx, reason) {
+  const candidates = signalCandidates();
+  const status = document.getElementById('lobby-status');
+  if (attempt < 2) {
+    const wait = 800 * Math.pow(2, attempt);
+    status.textContent = `${reason} Retrying in ${Math.round(wait / 1000)}s…`;
+    setTimeout(() => connectAsClient(code, attempt + 1, candidateIdx), wait);
+    return;
+  }
+  if (candidateIdx + 1 < candidates.length) {
+    status.textContent = `${reason} Trying another server…`;
+    setTimeout(() => connectAsClient(code, 0, candidateIdx + 1), 500);
+    return;
+  }
+  joinFailed(code, reason);
+}
+
+function joinFailed(code, reason) {
+  const status = document.getElementById('lobby-status');
+  status.textContent = reason;
+  status.classList.add('error');
+  state.retryJoinCode = code;
+  document.getElementById('btn-retry-room').style.display = 'block';
+  log('Join failed: ' + reason);
 }
 
 function handleClientMessage(data) {
   if (!data || typeof data !== 'object') return;
   log('recv from host: ' + data.type);
+
+  if (data.type === 'ping') {
+    if (state.hostConn && state.hostConn.open) {
+      try { state.hostConn.send({ type: 'pong' }); } catch (e) { /* ignore */ }
+    }
+    return;
+  }
+  if (data.type === 'pong') return;
 
   if (data.type === 'welcome') {
     state.myId = data.yourId;
@@ -2858,6 +3275,10 @@ function returnToLobby() {
 /* ============ SECTION: LEAVE ============ */
 function leaveRoom() {
   if (state.peer) state.peer.destroy();
+  stopKeepalive();
+  clearTimeout(reviveTimer);
+  state.roomOpened = false;
+  state.retryJoinCode = null;
   stopAmbience();
   clearTrialTimers();
   clearInterval(voteTimerInterval);
@@ -2931,6 +3352,20 @@ document.getElementById('btn-join').onclick = () => {
 document.getElementById('btn-add-bot').onclick = addBot;
 document.getElementById('btn-start').onclick = startGame;
 document.getElementById('btn-leave').onclick = leaveRoom;
+
+document.getElementById('btn-retry-room').onclick = () => {
+  document.getElementById('btn-retry-room').style.display = 'none';
+  const status = document.getElementById('lobby-status');
+  status.classList.remove('error');
+  if (state.peer) { try { state.peer.destroy(); } catch (e) { /* ignore */ } }
+  if (state.isHost) {
+    status.textContent = 'Opening room…';
+    createHostPeer(0, 0);
+  } else if (state.retryJoinCode) {
+    status.textContent = 'Connecting…';
+    connectAsClient(state.retryJoinCode, 0, 0);
+  }
+};
 document.getElementById('btn-share').onclick = shareInvite;
 
 document.getElementById('btn-set-up-case').onclick = () => {
