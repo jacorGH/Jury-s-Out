@@ -1,0 +1,8 @@
+{
+  "cases": [
+    "cases/example-heist.json",
+    "cases/riverfront-printing.json"
+  ],
+  "names": ["names/example-names.json"],
+  "phrases": ["phrases/example-phrases.json"]
+}
