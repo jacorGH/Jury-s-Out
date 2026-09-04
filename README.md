@@ -558,3 +558,6 @@ Being straight about what doesn't work:
 - Sounds synthesized in-browser with the Web Audio API — no samples
 - Cases are fiction. Any "based on a real case" content is fictionalized by
   instruction to the model; names and details are invented.
+  
+## License
+This game's code, art, and assets are licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0). See the LICENSE file for details.
