@@ -12,6 +12,10 @@ Inspired by Mafia and One Night Ultimate Werewolf, dressed as a courtroom.
 - **1 player or 8.** AI jurors fill empty seats, take their turn, and argue back.
 - **Turn-based round table.** One juror speaks at a time; pointing at someone
   draws a line across the table.
+- **Arguments actually work.** Jurors hold live convictions that your case can
+  move, and the AI votes from where you left it.
+- **Evidence you can slam on the table**, a second round when the jury hangs,
+  and a recap of how the room actually got there.
 - **AI-generated cases.** Build a prompt in-app, paste it into ChatGPT or
   Gemini, paste the JSON back.
 
@@ -149,7 +153,13 @@ by simulation:
 | Two-thirds | ~48% | 38% |
 | **60% (current)** | **~28%** | **~47%** |
 
-At 60%, every role lands in a competitive 27–56% range.
+At 60%, every role lands in a competitive 30–56% range.
+
+The bar is **strictly more** than 60% of ballots cast — `floor(n × 0.6) + 1`.
+Rounding up instead looked equivalent but broke 5-juror games: `ceil(5 × 0.6)`
+is 3, so every possible 3-2 split cleared it and the room could never hang,
+which meant **the Holdout could not win at all at that size**. The current
+formula is identical at 4, 6, 7 and 8 jurors.
 
 **Multi-defendant cases** don't need a clean sweep — hitting your target on most
 defendants counts as a win.
@@ -216,6 +226,76 @@ recent remark floats as a bubble beside their seat.
 Address a bot directly and it will answer **you** when the floor reaches it.
 
 Tune it with `TURN_SECONDS`.
+
+### Persuasion — arguments actually move votes
+
+Every juror carries a live **conviction** from -1 (Not Guilty) to +1 (Guilty),
+shown as a lean meter under their seat. Speaking exerts pressure on everyone
+listening, and **AI jurors vote from where deliberation left them**, not from
+the opinion they started with.
+
+What affects how much you move someone:
+
+| Factor | Effect |
+|---|---|
+| What you said | Scored for which side it pushes — "reasonable doubt" pulls one way, "the evidence proves it" the other |
+| **Slam** delivery | ~35% more forceful than a normal line |
+| **Sneer** delivery | Weaker, and aimed at someone it often *hardens* them against you |
+| Addressing them directly | ~70% more weight than speaking to the room |
+| Their role | Bought, Vendetta, Hardliner and Bleeding Heart barely budge. Truth Seekers are wide open |
+| Repetition | Sharp diminishing returns — the same line to the same juror stops working |
+
+Sustained pressure can even crack a committed role into wavering at the ballot.
+
+Feedback is immediate: seats that shifted flash ▲/▼, a **room read** counts who
+leans where, and after you speak you're told exactly who you moved — or
+"Nobody budged."
+
+**Balance:** tuned by simulation. Three hard arguments move guilty verdicts from
+~33% to ~63%. Arguing clearly pays, but the room has to be won rather than
+steamrolled — at the first value tried it was 94%, which meant spamming one line
+was a winning strategy. Adjust with `PERSUASION_BASE`.
+
+> The lean meter shows what a juror has **said**, not how they'll vote. A human
+> player can talk one way and vote another — reading the room is a skill, not a
+> readout.
+
+### Citing evidence
+
+Pointing at an actual exhibit beats asserting things. Attach one with **Cite**
+in the compose bar, or pick one when a preset line has an `{evidence}` slot.
+
+- The exhibit **flies onto the middle of the table and stamps**, with a thud.
+- The argument lands **~45% harder** (`EVIDENCE_CITE_BONUS`).
+- It also **steers** the argument: cite something that favours the prosecution
+  and it pushes toward guilty, whatever your wording.
+
+The host validates every citation against the real case, so a modified client
+can't invent an exhibit or lie about which side it favours.
+
+### Hung juries get a second round
+
+A first hung ballot no longer ends the game — it was the least interesting
+possible ending now that arguments move people. Instead:
+
+- The **Deadlock** screen shows the split and how many votes were needed.
+- **Nothing is revealed** — no roles, no true outcome.
+- The host can **send them back to deliberate** or **accept the hung jury**.
+- Convictions carry over, but **argument fatigue resets**, so the same points
+  can land again on a room that has now heard them once.
+- A second hung ballot stands. The Holdout wins.
+
+Set the limit with `MAX_VOTE_ROUNDS`.
+
+### Post-game recap
+
+The verdict screen opens with **How it happened** — the deliberation retold from
+the sway log:
+
+> It took 2 ballots to get here.
+> Mabel crossed to guilty after Sam pressed them in round 1.
+> Sam shifted the room more than anyone else.
+> Otto and Rae never budged.
 
 ### Re-examining the evidence
 
@@ -380,6 +460,10 @@ All near the top of the `<script>` in `index.html`.
 | `MAX_PLAYERS` | `8` | Seats in the jury box |
 | `VOTE_SECONDS` | `90` | Clock before contempt |
 | `TURN_SECONDS` | `24` | Length of one juror's turn at the table |
+| `PERSUASION_BASE` | `0.11` | How much one argument moves a listener |
+| `EVIDENCE_CITE_BONUS` | `1.45` | Extra weight for citing a real exhibit |
+| `MAX_VOTE_ROUNDS` | `2` | Ballots before a deadlock stands |
+| `STUBBORNNESS` | per role | How much each role resists persuasion |
 | `ROLE_COUNTS_BY_PLAYERS` | `{4:2 … 8:4}` | Special roles per jury size |
 | `CHAT_MIN_INTERVAL_MS` | `1100` | Chat rate limit |
 | `CODE_LENGTH` | `4` | Room code length |
@@ -573,7 +657,6 @@ Being straight about what doesn't work:
 - **Whispers aren't private from the host** — the host relays all traffic.
 - **Sealed outcomes are obfuscated, not encrypted.** A static-file game can't
   keep a secret from someone with devtools.
-- **Single voting round.** No re-argue-and-revote after a hung jury.
 - **The round table is built for 8.** The colour palette and seat spacing assume
   the 8-seat maximum; raising `MAX_PLAYERS` needs more colours and smaller seats.
 - **Needs internet even for solo play** — PeerJS and fonts load from CDNs, and a

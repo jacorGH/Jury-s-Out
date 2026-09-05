@@ -528,6 +528,68 @@
   .turn-banner.mine{ border-left-color:var(--brass); background:rgba(184,147,74,.1); }
   .turn-banner .tb-text{ flex:1; }
 
+  /* Lean meter: left is Guilty (red), right is Not Guilty (brass). */
+  .seat-lean{
+    position:relative; width:34px; height:3px; border-radius:2px; margin:4px auto 0;
+    background:linear-gradient(90deg, var(--redline) 0%, var(--ink-line) 50%, var(--brass) 100%);
+  }
+  .seat-lean i{
+    position:absolute; top:-2.5px; left:50%; width:8px; height:8px; border-radius:50%;
+    background:var(--text-light); border:1px solid var(--ink);
+    transform:translateX(-50%); transition:left .6s cubic-bezier(.3,.8,.3,1);
+  }
+  .seat-move{
+    height:11px; font-size:10px; line-height:11px; opacity:0;
+  }
+  .seat-move.show{ animation:moveFlash 1.6s ease-out; }
+  @keyframes moveFlash{
+    0%{ opacity:0; transform:translateY(3px); }
+    18%{ opacity:1; transform:translateY(0); }
+    72%{ opacity:1; } 100%{ opacity:0; }
+  }
+
+  .room-read{
+    text-align:center; font-size:11px; letter-spacing:.06em;
+    color:var(--text-dim); margin-bottom:6px;
+  }
+  .sway-note{
+    text-align:center; font-size:12px; min-height:17px;
+    color:var(--text-dim); margin-bottom:12px;
+  }
+  .sway-note.hit{ color:var(--brass); }
+
+  /* An exhibit slammed onto the table: flies up, lands, stamps, fades. */
+  .ev-card{
+    position:absolute; left:50%; top:50%; z-index:6;
+    width:132px; padding:9px 11px; border-radius:4px;
+    background:var(--paper); color:var(--ink);
+    box-shadow:0 10px 26px rgba(0,0,0,.55);
+    font-size:10.5px; line-height:1.25; text-align:left;
+    pointer-events:none; transform-origin:center;
+    animation:evSlam 2.1s cubic-bezier(.2,.9,.3,1.2) forwards;
+  }
+  .ev-card .ev-k{ font-size:8px; letter-spacing:.12em; text-transform:uppercase; color:var(--brass-dim); }
+  .ev-card .ev-t{ font-weight:600; margin-top:1px; }
+  .ev-card .ev-f{ font-size:8.5px; color:#6B6455; margin-top:3px; }
+  @keyframes evSlam{
+    0%{ transform:translate(-50%,60%) scale(1.5) rotate(-9deg); opacity:0; }
+    18%{ transform:translate(-50%,-50%) scale(1.06) rotate(2deg); opacity:1; }
+    26%{ transform:translate(-50%,-50%) scale(.97) rotate(-1deg); }
+    34%{ transform:translate(-50%,-50%) scale(1) rotate(0deg); }
+    82%{ transform:translate(-50%,-50%) scale(1) rotate(0deg); opacity:1; }
+    100%{ transform:translate(-50%,-64%) scale(.9) rotate(0deg); opacity:0; }
+  }
+  .chat-msg-cite{
+    font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--brass); margin-bottom:2px;
+  }
+
+  ul.recap{ list-style:none; margin:0 0 20px; padding:0; }
+  ul.recap li{
+    font-size:13.5px; line-height:1.5; color:var(--text-light);
+    padding:8px 0 8px 14px; border-left:2px solid var(--brass-dim); margin-bottom:8px;
+  }
+
   /* ============ CASE FILE SHEET ============ */
   .sheet-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:32;
@@ -820,6 +882,9 @@
     </div>
   </div>
 
+  <div class="room-read" id="room-read"></div>
+  <div class="sway-note" id="sway-note"></div>
+
   <button class="btn btn-primary" id="btn-delib-chat">Speak up</button>
   <button class="btn btn-secondary" id="btn-delib-casefile">Re-examine the case file</button>
   <div class="spacer"></div>
@@ -850,10 +915,30 @@
   <div id="vote-host-controls" style="display:none;"><button class="btn btn-secondary btn-small" id="btn-force-tally">Tally now (skip stragglers)</button></div>
 </div>
 
+<!-- ============ SCREEN: DEADLOCK (hung first ballot) ============ -->
+<div class="screen" id="screen-deadlock">
+  <h2>Deadlocked</h2>
+  <p class="subhead" style="max-width:none;">No side reached the threshold. The judge is sending you back in — and nothing has been revealed yet.</p>
+  <div class="sec-head"><span id="dl-round">Ballot 1 of 2</span></div>
+  <div id="dl-splits" style="margin-bottom:16px;"></div>
+  <div class="room-read" id="dl-room-read"></div>
+  <div class="spacer"></div>
+  <div id="dl-host-controls" style="display:none;">
+    <button class="btn btn-primary" id="btn-redeliberate">Send them back to deliberate</button>
+    <button class="btn btn-secondary" id="btn-accept-hung">Accept the hung jury</button>
+  </div>
+  <p class="status" id="dl-status"></p>
+</div>
+
 <!-- ============ SCREEN: RESULTS ============ -->
 <div class="screen" id="screen-results">
   <h2>Verdict</h2>
   <div id="res-verdicts" style="margin-bottom:12px;"></div>
+  <div id="res-recap-wrap" style="display:none;">
+    <div class="sec-head">How it happened</div>
+    <ul class="recap" id="res-recap"></ul>
+  </div>
+
   <div class="sec-head">Who was playing whom</div>
   <ul class="roster" id="res-roles"></ul>
   <div class="spacer"></div>
@@ -872,6 +957,7 @@
         <button type="button" class="mini-select" id="btn-chat-target">To: Everyone</button>
         <button type="button" class="mini-select" id="btn-chat-whisper">Whisper: off</button>
         <button type="button" class="mini-select" id="btn-chat-style">Say</button>
+        <button type="button" class="mini-select" id="btn-chat-evidence">Cite: none</button>
       </div>
       <div class="compose-row">
         <textarea id="chat-input" rows="1" maxlength="240" placeholder="Say something to the jury…"></textarea>
@@ -1313,10 +1399,29 @@ ${realWorld
 - Keep language courtroom-appropriate: summarize evidence the way a real case file would, without graphic sensory detail.
 ${contentLimits ? '- Additional constraints: ' + contentLimits : ''}
 
-Delivery markup (optional but encouraged) — the game animates these:
-- Wrap 2-4 of the most damning or pivotal phrases per statement in **double asterisks**. They land hard, with a sound cue and a camera move.
-- Wrap softer emphasis in *single asterisks*, and any muttered aside in _underscores_.
-- Write the statements to be performed aloud: short punchy sentences, a clear build, and a final line that hits.
+WRITING THE OPENING STATEMENTS — this is the most important part.
+These are performed aloud to a jury by an actor, not filed as a brief. A flat
+recitation of facts ruins the game. Write each statement as 5-8 sentences of
+courtroom theatre:
+
+- OPEN COLD. Lead with an image, a moment, or a number — never "The prosecution will show that..."
+- VARY THE RHYTHM. Mix long sentences with very short ones. A three-word sentence lands like a slap.
+- BE CONCRETE. Name the object, the hour, the room, the amount. "A glass, four minutes, no camera" beats "opportunity to administer a substance."
+- ADDRESS THE JURY as "you". Give them something to do: picture it, count it, ask themselves.
+- ESCALATE, then turn. Build the case, then pivot on the strongest single point.
+- END ON A LINE THAT HITS. The last sentence should be short, quotable, and impossible to answer politely.
+- The two sides must genuinely clash — the defense should attack the prosecution's specific strongest claim, not just assert innocence.
+- No legalese padding, no "ladies and gentlemen of the jury", no summarising what you're about to say.
+
+DELIVERY MARKUP — the game animates these, so use them:
+- Wrap the 2-4 most damning or pivotal phrases in **double asterisks**. These land all at once with a sound cue, a screen shake and a camera push.
+- *Single asterisks* for softer emphasis. _Underscores_ for a muttered aside.
+- ~Tildes~ for a sneering, sarcastic phrase.
+- Numbers, quoted testimony and legal terms are highlighted automatically — you don't need to mark those.
+
+Example of the tone and density wanted (do not reuse the content):
+"prosecutionStatement": "Marcus Ferro sat down to dinner a healthy man. **He never stood up again.** For 4 minutes that kitchen camera saw nothing — and in those 4 minutes, one person stood beside his glass. The defence will tell you that is a coincidence. *Four minutes.* **One glass. One person.** You do not need a confession to know what happened in that room."
+"defenseStatement": "My client had **no access** to the compound that killed Marcus Ferro. Not in her home. Not in her bag. Not anywhere in that kitchen. And 2 weeks before he died, someone else in that house quietly became the sole beneficiary of his life insurance. _They have not asked her one question about that._ The State needs you to fill in the gaps for them. **That is not evidence. That is a story.**"
 
 Formatting rules (important):
 - "trueOutcomeRev" must be the true verdict spelled BACKWARDS, so the person running the game does not accidentally read it. Use exactly "ytliug" for guilty, or "ytliug_ton" for not guilty. Never write the verdict forwards anywhere in the JSON, and do not hint at it in the summary or statements.
@@ -1615,6 +1720,11 @@ const state = {
   chatCategory: 'role',
   turn: null,             // { order, index, round, deadline, spoke, passed }
   botOwes: {},            // botId -> playerId who addressed it, answered on the bot's turn
+  lean: {},               // playerId -> -1 (not guilty) .. +1 (guilty), live conviction
+  influence: {},          // "speaker>listener" -> times spoken, for diminishing returns
+  swayLog: [],            // meaningful conviction moves, for the post-game recap
+  voteRound: 1,           // which ballot we're on
+  chatEvidence: null,     // exhibit attached to the next message, if any
   chatLog: []
 };
 let voteTimerInterval = null;
@@ -2015,11 +2125,17 @@ function handleHostMessage(conn, data) {
     const name = player ? player.name : 'Juror';
     const to = data.to && state.roster.some(p => p.id === data.to) ? data.to : null;
     const toName = to ? (state.roster.find(p => p.id === to) || {}).name : null;
+    // Only accept a citation that matches a real exhibit in this case.
+    let evidence = null;
+    if (data.evidence && data.evidence.id) {
+      const real = state.caseData.evidence.find(e => e.id === data.evidence.id);
+      if (real) evidence = { id: real.id, title: real.title, favors: real.favors };
+    }
     const msg = {
       from: conn.peer, name,
       text: String(data.text || '').slice(0, 240),
       style: ['slam', 'sarcasm'].includes(data.style) ? data.style : 'flow',
-      to, toName, whisper: !!(data.whisper && to)
+      to, toName, whisper: !!(data.whisper && to), evidence
     };
     // While the floor is being taken in turns, only the current speaker is
     // heard. Whispers are exempt — they're private side-talk, not the floor.
@@ -2030,7 +2146,12 @@ function handleHostMessage(conn, data) {
     if (!msg.whisper || msg.to === 'host') appendChatMessage(msg);
     relayChat(msg);
     noteBotAddressed(msg.to, conn.peer);
-    if (!msg.whisper) consumeTurn(conn.peer);
+    if (!msg.whisper) {
+      const moved = applyPersuasion(msg);
+      broadcastLeans(moved);
+      try { conn.send({ type: 'sway', moved }); } catch (e) { /* ignore */ }
+      consumeTurn(conn.peer);
+    }
   }
 }
 
@@ -2321,6 +2442,12 @@ function handleClientMessage(data) {
     if (data.phase === 'deliberate') showDeliberateScreen();
     else if (data.phase === 'vote') showVoteScreen(data.deadline);
     else if (data.phase === 'lobby') returnToLobby();
+  } else if (data.type === 'deadlock') {
+    showDeadlockScreen(data);
+  } else if (data.type === 'leans') {
+    applyLeans(data);
+  } else if (data.type === 'sway') {
+    reportSway(data.moved);
   } else if (data.type === 'turn') {
     state.turn = { order: data.order, index: data.index, round: data.round, deadline: data.deadline, spoke: data.spoke || {}, passed: data.passed || {} };
     applyTurn();
@@ -2424,6 +2551,9 @@ function startGame() {
     state.botBias[p.id] = Math.random() * 1.1 - 0.55;
   });
 
+  initLeans();
+  state.swayLog = [];
+  state.voteRound = 1;
   log('Roles assigned: ' + JSON.stringify(state.roleAssignment));
   showRoleReveal(state.myRoleId);
 }
@@ -2477,6 +2607,7 @@ function showDeliberateScreen() {
   renderRoleChips();
   renderRoundTable();
   renderTurnBanner();
+  renderRoomRead();
   document.getElementById('delib-host-controls').style.display = state.isHost ? 'block' : 'none';
   document.getElementById('delib-status').textContent = state.isHost
     ? 'Call the vote whenever the room is ready.'
@@ -3048,6 +3179,237 @@ function wireRoleChips() {
   });
 }
 
+/* ============ SECTION: PERSUASION ============
+   Without this, arguing is decoration: every juror voted from a fixed opinion
+   formed the moment roles were dealt, so nothing anyone said could change the
+   outcome. Now each juror carries a live conviction from -1 (Not Guilty) to
+   +1 (Guilty), speaking exerts pressure on everyone listening, and bots vote
+   from where they have actually ended up.
+
+   Two things make it feel real rather than arbitrary:
+     - it's visible (a lean meter under every seat, and a room read)
+     - it's resistible (committed roles barely budge, so the game becomes
+       finding out who is actually swayable)
+*/
+
+// How much a juror resists pressure. Roles with a fixed agenda are nearly
+// immovable; the open-minded ones are where arguments are actually won.
+const PERSUASION_BASE = 0.11;
+const EVIDENCE_CITE_BONUS = 1.45;  // pointing at an exhibit beats asserting
+const MAX_VOTE_ROUNDS = 2;         // ballots allowed before a deadlock stands
+
+const STUBBORNNESS = {
+  bought: 0.88, vendetta: 0.88, hardliner: 0.86, bleeding_heart: 0.86,
+  insider: 0.6, holdout: 0.55, last_word: 0.4, truth_seeker: 0.22
+};
+
+const GUILTY_CUES = [
+  'guilty', 'convict', 'conviction', 'justice', 'accountable', 'responsible',
+  'proves', 'proven', 'proof', 'motive', 'opportunity', 'lied', 'lying',
+  'deliberate', 'certainguilt', 'did it', 'obvious', 'pattern'
+];
+const INNOCENT_CUES = [
+  'innocent', 'reasonable doubt', 'doubt', 'acquit', 'mercy',
+  'not convinced', 'no evidence', 'someone else', 'framed', 'coincidence',
+  'circumstantial', 'unproven', 'assumption', 'speculation', 'benefit of the doubt',
+  'rush', 'ruin', 'another explanation'
+];
+
+// Reads which way a line pushes, from -1 to +1.
+function inferLean(text) {
+  // Rewrite the negation to a word that does NOT contain "guilty", or the
+  // guilty cue matches inside it and the two lists cancel out.
+  const t = ' ' + String(text).toLowerCase()
+    .replace(/not\s+guilty/g, 'acquit')
+    .replace(/isn'?t\s+guilty/g, 'acquit')
+    .replace(/no\s+doubt/g, 'certainguilt') + ' ';
+  let score = 0;
+  INNOCENT_CUES.forEach(c => { if (t.includes(c)) score -= 1; });
+  GUILTY_CUES.forEach(c => { if (t.includes(c)) score += 1; });
+  if (!score) return 0;
+  return Math.max(-1, Math.min(1, score / 2));
+}
+
+// Explicit lean on a preset beats inference; otherwise read the words.
+function leanOfMessage(msg) {
+  if (typeof msg.lean === 'number') return msg.lean;
+  return inferLean(msg.text);
+}
+
+function initLeans() {
+  if (!state.isHost) return;
+  state.lean = {};
+  state.influence = {};
+  state.roster.forEach(p => {
+    if (p.isBot) {
+      // Bots start from their own read of the evidence plus their disposition.
+      const ev = evidenceLean(state.caseData, state.botEvidence[p.id] || []);
+      const bias = (state.botBias && state.botBias[p.id]) || 0;
+      state.lean[p.id] = Math.max(-1, Math.min(1, ev * 0.55 + bias));
+    } else {
+      // Humans show no public stance until they say something.
+      state.lean[p.id] = 0;
+    }
+  });
+}
+
+/* Applies one spoken line to the room. Returns the jurors who moved, so the
+   speaker gets immediate feedback that they landed something. */
+function applyPersuasion(msg) {
+  if (!state.isHost || !state.lean) return [];
+  let push = leanOfMessage(msg);
+
+  // Citing an exhibit both strengthens the argument and points it in the
+  // direction that exhibit actually favours — so using evidence beats
+  // asserting things, which is the behaviour worth rewarding.
+  let citeFactor = 1;
+  if (msg.evidence) {
+    citeFactor = EVIDENCE_CITE_BONUS;
+    const f = msg.evidence.favors;
+    const evLean = f === 'prosecution' ? 0.6 : f === 'defense' ? -0.6 : 0;
+    push = Math.max(-1, Math.min(1, push + evLean));
+  }
+  const moved = [];
+
+  // Speaking is also declaring: it moves your own displayed stance most.
+  if (push !== 0 && msg.from in state.lean) {
+    const before = state.lean[msg.from];
+    state.lean[msg.from] = Math.max(-1, Math.min(1, before + push * 0.45));
+    if (Math.abs(state.lean[msg.from] - before) > 0.02) {
+      moved.push({ id: msg.from, dir: push > 0 ? 1 : -1, self: true });
+    }
+  }
+
+  if (push === 0) return moved;
+
+  const styleFactor = msg.style === 'slam' ? 1.35 : msg.style === 'sarcasm' ? 0.7 : 1;
+
+  state.roster.forEach(p => {
+    if (p.id === msg.from) return;
+    const roleId = state.roleAssignment[p.id];
+    const resist = STUBBORNNESS[roleId] !== undefined ? STUBBORNNESS[roleId] : 0.5;
+
+    // Saying the same thing to the same person repeatedly stops working.
+    const key = msg.from + '>' + p.id;
+    state.influence[key] = (state.influence[key] || 0) + 1;
+    const fatigue = 1 / (1 + (state.influence[key] - 1) * 0.55);
+
+    const addressed = msg.to === p.id ? 1.7 : 1;
+    // PERSUASION_BASE tuned by simulation. At 0.34 three hard arguments pushed
+    // guilty verdicts from 38% to 94% — you could win by spamming one line. At
+    // 0.11 the same effort moves it to ~64%: arguing clearly pays, but the room
+    // still has to be won rather than steamrolled.
+    let weight = PERSUASION_BASE * styleFactor * citeFactor * addressed * fatigue * (1 - resist);
+
+    // A sneer aimed at someone often hardens them instead of moving them.
+    let direction = push;
+    if (msg.style === 'sarcasm' && msg.to === p.id && Math.random() < 0.45) {
+      direction = -push;
+      weight *= 0.8;
+    }
+
+    const before = state.lean[p.id];
+    state.lean[p.id] = Math.max(-1, Math.min(1, before + direction * weight));
+    const after = state.lean[p.id];
+    const delta = after - before;
+    if (Math.abs(delta) > 0.02) {
+      moved.push({ id: p.id, dir: delta > 0 ? 1 : -1 });
+      if (Math.abs(delta) > 0.05) {
+        state.swayLog.push({
+          round: state.voteRound, speakerId: msg.from, targetId: p.id,
+          from: before, to: after,
+          // A flip is crossing zero — changing sides. Checking for a single
+          // message that jumps someone from +0.1 to -0.1 (as this first did)
+          // requires a delta no argument ever produces, so nothing ever flipped.
+          flipped: (before > 0 !== after > 0) && Math.abs(after) > 0.08
+        });
+      }
+    }
+  });
+
+  return moved;
+}
+
+function broadcastLeans(moved) {
+  if (!state.isHost) return;
+  const payload = { type: 'leans', lean: state.lean, moved: moved || [] };
+  sendToAll(payload);
+  applyLeans(payload);
+}
+
+function applyLeans(data) {
+  state.lean = data.lean || {};
+  renderRoundTable();
+  flashMoved(data.moved || []);
+  renderRoomRead();
+}
+
+// Brief arrow on any seat that shifted, so persuasion is legible in the moment.
+// Throws the cited exhibit onto the middle of the table.
+function slamEvidenceCard(ev) {
+  const wrap = document.getElementById('round-table');
+  if (!wrap || !ev) return;
+  const card = document.createElement('div');
+  card.className = 'ev-card';
+  const k = document.createElement('div'); k.className = 'ev-k'; k.textContent = 'Exhibit';
+  const t = document.createElement('div'); t.className = 'ev-t'; t.textContent = ev.title || 'Evidence';
+  const f = document.createElement('div'); f.className = 'ev-f';
+  f.textContent = ev.favors === 'prosecution' ? 'Favours the prosecution'
+    : ev.favors === 'defense' ? 'Favours the defence' : 'Neutral';
+  card.appendChild(k); card.appendChild(t); card.appendChild(f);
+  wrap.appendChild(card);
+  playSound('stamp');
+  quake(wrap);
+  setTimeout(() => card.remove(), 2200);
+}
+
+function flashMoved(moved) {
+  moved.forEach(m => {
+    const seat = document.querySelector('[data-seat="' + m.id + '"]');
+    if (!seat) return;
+    const badge = seat.querySelector('.seat-move');
+    if (!badge) return;
+    badge.textContent = m.dir > 0 ? '\u25B2' : '\u25BC';
+    badge.style.color = m.dir > 0 ? 'var(--redline-lit)' : 'var(--brass)';
+    badge.classList.remove('show');
+    void badge.offsetWidth;
+    badge.classList.add('show');
+  });
+  if (moved.some(m => !m.self)) playSound('blip');
+}
+
+/* The point of arguing is knowing whether it worked. After you speak, name who
+   you actually moved — this is the feedback loop that makes the round table
+   feel like persuasion instead of a chat window. */
+function reportSway(moved) {
+  const others = (moved || []).filter(m => !m.self);
+  const el = document.getElementById('sway-note');
+  if (!el) return;
+  if (!others.length) {
+    el.textContent = 'Nobody budged.';
+    el.className = 'sway-note';
+    return;
+  }
+  const names = others.slice(0, 3).map(m => {
+    const p = state.roster.find(x => x.id === m.id);
+    return (p ? p.name : 'Someone') + (m.dir > 0 ? ' \u2192 guilty' : ' \u2192 not guilty');
+  });
+  const extra = others.length > 3 ? ` and ${others.length - 3} more` : '';
+  el.textContent = 'You moved ' + names.join(', ') + extra + '.';
+  el.className = 'sway-note hit';
+}
+
+function renderRoomRead() {
+  const el = document.getElementById('room-read');
+  if (!el || !state.lean) return;
+  let g = 0, ng = 0, open = 0;
+  state.roster.forEach(p => {
+    const v = state.lean[p.id] || 0;
+    if (v > 0.15) g++; else if (v < -0.15) ng++; else open++;
+  });
+  el.textContent = `Leaning guilty ${g} · undecided ${open} · leaning not guilty ${ng}`;
+}
+
 /* ============ SECTION: ROUND TABLE & TURN ORDER ============
    Deliberation is turn-based. Free-for-all chat meant the AI jurors buried
    everyone else, and there was no way to follow who was answering whom. Now
@@ -3189,6 +3551,7 @@ function botTakeTurn(bot) {
   };
   appendChatMessage(msg);
   relayChat(msg);
+  broadcastLeans(applyPersuasion(msg));
   consumeTurn(bot.id);
 }
 
@@ -3275,6 +3638,20 @@ function renderRoundTable() {
     else if (state.turn && state.turn.spoke[p.id]) { tag.textContent = 'spoke'; tag.classList.add('spoke'); }
     seat.appendChild(tag);
 
+    // Where this juror currently leans, based on what they've said.
+    const meter = document.createElement('div');
+    meter.className = 'seat-lean';
+    const dot = document.createElement('i');
+    const v = (state.lean && state.lean[p.id]) || 0;
+    dot.style.left = ((1 - v) / 2 * 100) + '%';
+    meter.appendChild(dot);
+    seat.appendChild(meter);
+
+    const move = document.createElement('div');
+    move.className = 'seat-move';
+    seat.appendChild(move);
+
+    seat.setAttribute('data-seat', p.id);
     wrap.appendChild(seat);
 
     // Their latest line, pulled toward the middle of the table.
@@ -3475,6 +3852,11 @@ function renderComposeMeta() {
   sBtn.textContent = st.label;
   sBtn.classList.toggle('on', st.id !== 'flow');
 
+  const eBtn = document.getElementById('btn-chat-evidence');
+  const ev = state.chatEvidence;
+  eBtn.textContent = ev ? 'Cite: ' + (ev.title || 'exhibit') : 'Cite: none';
+  eBtn.classList.toggle('on', !!ev);
+
   const input = document.getElementById('chat-input');
   input.placeholder = state.chatWhisper && t
     ? `Whisper to ${t.name}…`
@@ -3555,6 +3937,32 @@ function handlePhraseTap(phrase) {
   sendChat(text, phrase.style);
 }
 
+// Lets a typed message point at an exhibit, the same way presets can.
+function openEvidenceAttach() {
+  if (state.chatEvidence) { state.chatEvidence = null; renderComposeMeta(); return; }
+  const wrap = document.getElementById('chat-evidence-picker');
+  wrap.innerHTML = '';
+  wrap.style.display = 'flex';
+  const options = [
+    ...((state.publicCase && state.publicCase.publicEvidence) || []),
+    ...(state.myPersonalEvidence || [])
+  ];
+  if (!options.length) { showError('No evidence to cite yet.'); wrap.style.display = 'none'; return; }
+  options.forEach(e => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chat-phrase-btn';
+    chip.textContent = e.title || 'Evidence';
+    chip.onclick = () => {
+      state.chatEvidence = { id: e.id, title: e.title, favors: e.favors };
+      wrap.style.display = 'none';
+      renderComposeMeta();
+      playSound('tap');
+    };
+    wrap.appendChild(chip);
+  });
+}
+
 function showEvidencePicker(phrase, textTemplate) {
   const wrap = document.getElementById('chat-evidence-picker');
   wrap.innerHTML = '';
@@ -3571,7 +3979,7 @@ function showEvidencePicker(phrase, textTemplate) {
     chip.onclick = () => {
       const finalText = textTemplate.replace('{evidence}', (e.title || 'that evidence').toLowerCase());
       wrap.style.display = 'none';
-      sendChat(finalText, phrase.style);
+      sendChat(finalText, phrase.style, e);
     };
     wrap.appendChild(chip);
   });
@@ -3588,8 +3996,9 @@ function sendCustomChat() {
   }
 }
 
-// Returns true if the message went out.
-function sendChat(text, style) {
+// Returns true if the message went out. `cited` is an optional exhibit, which
+// makes the argument land harder and steers it the way that exhibit points.
+function sendChat(text, style, cited) {
   const now = Date.now();
   if (now - lastChatSentAt < CHAT_MIN_INTERVAL_MS) {
     showError('Easy — one at a time.');
@@ -3600,6 +4009,8 @@ function sendChat(text, style) {
   const clean = String(text).slice(0, 240);
   const target = state.chatTarget || null;
   const whisper = !!(state.chatWhisper && target);
+  const ev = cited || state.chatEvidence || null;
+  const evidence = ev ? { id: ev.id, title: ev.title, favors: ev.favors } : null;
 
   // Turn-based deliberation: wait your turn. Whispering is always allowed.
   if (state.turn && !whisper && !isMyTurn()) {
@@ -3610,22 +4021,26 @@ function sendChat(text, style) {
   const targetName = target ? (state.roster.find(p => p.id === target) || {}).name : null;
 
   if (state.isHost) {
-    const msg = { from: state.myId, name: state.myName, text: clean, style, to: target, toName: targetName, whisper };
+    const msg = { from: state.myId, name: state.myName, text: clean, style, to: target, toName: targetName, whisper, evidence };
     appendChatMessage(msg);
     relayChat(msg);
-    if (!whisper) consumeTurn(state.myId);
+    if (!whisper) {
+      const moved = applyPersuasion(msg);
+      broadcastLeans(moved);
+      reportSway(moved);
+      consumeTurn(state.myId);
+    }
   } else if (state.hostConn && state.hostConn.open) {
-    state.hostConn.send({ type: 'chat', text: clean, style, to: target, whisper });
+    state.hostConn.send({ type: 'chat', text: clean, style, to: target, whisper, evidence });
   } else {
     showError('Not connected to the room.');
     return false;
   }
 
-  // Whispering is a one-shot action; drop back to open discussion after.
-  if (whisper) {
-    state.chatWhisper = false;
-    renderComposeMeta();
-  }
+  // Whispering and citing are both one-shot; reset after the message goes.
+  if (whisper) state.chatWhisper = false;
+  if (state.chatEvidence) state.chatEvidence = null;
+  renderComposeMeta();
   noteBotAddressed(target, state.myId);
   return true;
 }
@@ -3636,7 +4051,7 @@ function sendChat(text, style) {
    the other players but not from whoever is hosting. */
 function relayChat(msg) {
   if (!state.isHost) return;
-  const payload = { type: 'chat', from: msg.from, name: msg.name, text: msg.text, style: msg.style, to: msg.to, toName: msg.toName, whisper: msg.whisper };
+  const payload = { type: 'chat', from: msg.from, name: msg.name, text: msg.text, style: msg.style, to: msg.to, toName: msg.toName, whisper: msg.whisper, evidence: msg.evidence };
   if (msg.whisper) {
     if (msg.to && msg.to !== 'host') {
       const conn = state.connections.get(msg.to);
@@ -3686,6 +4101,13 @@ function appendChatMessage(msg) {
     el.appendChild(toEl);
   }
 
+  if (msg.evidence) {
+    const cite = document.createElement('div');
+    cite.className = 'chat-msg-cite';
+    cite.textContent = '\u25A0 ' + (msg.evidence.title || 'exhibit');
+    el.appendChild(cite);
+  }
+
   const textEl = document.createElement('div');
   textEl.className = 'chat-msg-text';
   textEl.textContent = msg.text; // textContent, never innerHTML — this is free text now
@@ -3696,6 +4118,7 @@ function appendChatMessage(msg) {
 
   if (document.getElementById('screen-deliberate').classList.contains('active')) {
     renderRoundTable();
+    if (msg.evidence) slamEvidenceCard(msg.evidence);
   }
 
   if (msg.style === 'slam') {
@@ -3844,18 +4267,26 @@ function botVote(botId, roleId) {
   state.caseData.defendants.forEach(d => {
     let choice;
     if (role.win.type === 'verdict' && role.win.value !== 'true_outcome') {
-      // Committed roles push their side, with a small chance of wavering.
-      choice = Math.random() < 0.88 ? role.win.value : (role.win.value === 'guilty' ? 'not_guilty' : 'guilty');
+      // Committed roles push their own side, but sustained pressure the other
+      // way can crack them — so arguing at a stubborn juror isn't pointless.
+      const want = role.win.value === 'guilty' ? 1 : -1;
+      const conviction = (state.lean && state.lean[botId]) || 0;
+      const against = Math.max(0, -conviction * want);   // 0..1
+      const hold = 0.93 - against * 0.28;
+      choice = Math.random() < hold ? role.win.value : (role.win.value === 'guilty' ? 'not_guilty' : 'guilty');
     } else if (roleId === 'insider') {
       choice = trueOutcomeOf(d); // the Insider actually knows
     } else if (role.win.type === 'hung_jury') {
       // Holdout votes against wherever the room seems to be heading.
       choice = lean >= 0 ? 'not_guilty' : 'guilty';
     } else {
-      // Reads the evidence like a player would — and can misread it.
-      // lean is deliberately damped: a case that tilts shouldn't hand one side
-      // every neutral juror, or the opposing roles have nobody to persuade.
-      const score = lean * 0.55 + bias + (Math.random() * 1.4 - 0.7);
+      // Votes from where deliberation actually left them. state.lean starts at
+      // their evidence read and moves with every argument they heard, so this
+      // is the payoff for the persuasion system.
+      const conviction = (state.lean && typeof state.lean[botId] === 'number')
+        ? state.lean[botId]
+        : lean * 0.55 + bias;
+      const score = conviction + (Math.random() * 0.5 - 0.25); // a little indecision
       choice = score > 0 ? 'guilty' : 'not_guilty';
     }
     votes[d.id] = choice;
@@ -3869,6 +4300,7 @@ function stopBotChatter() {
 }
 
 function stopTurns() {
+  state.influence = {};
   clearInterval(turnTicker);
   clearTimeout(botTurnTimer);
   turnTicker = null;
@@ -3915,7 +4347,10 @@ function verdictFor(voteSets, defendantId) {
   const vals = voteSets.map(v => v[defendantId]).filter(v => v === 'guilty' || v === 'not_guilty');
   const guilty = vals.filter(v => v === 'guilty').length;
   const notGuilty = vals.length - guilty;
-  const needed = vals.length ? Math.ceil(vals.length * VERDICT_RATIO) : 0;
+  // Strictly MORE than the ratio. Using ceil() meant a 5-juror room could never
+  // hang — every 3-2 split cleared the bar — so the Holdout could not win at
+  // that size at all. floor()+1 fixes 5 and is identical at 4, 6, 7 and 8.
+  const needed = vals.length ? Math.floor(vals.length * VERDICT_RATIO) + 1 : 0;
   let verdict = 'hung';
   if (vals.length) {
     if (guilty >= needed) verdict = 'guilty';
@@ -3993,13 +4428,29 @@ function checkWin(playerId, role, finalVerdicts, caseData) {
 function resolveGame() {
   clearInterval(voteTimerInterval);
   const finalVerdicts = tallyVerdicts();
+
+  // A hung jury used to just end the game — which was the least interesting
+  // possible outcome now that arguments can move people. Give the room another
+  // pass with the split on the table, and reveal nothing yet.
+  const anyHung = state.caseData.defendants.some(d => finalVerdicts[d.id] === 'hung');
+  if (anyHung && state.voteRound < MAX_VOTE_ROUNDS) {
+    const splits = state.caseData.defendants.map(d => {
+      const sp = state.lastSplits[d.id] || { guilty: 0, notGuilty: 0, cast: 0, needed: 0 };
+      return { id: d.id, name: d.name, verdict: finalVerdicts[d.id], guilty: sp.guilty, notGuilty: sp.notGuilty, cast: sp.cast, needed: sp.needed };
+    });
+    const payload = { type: 'deadlock', splits, round: state.voteRound, maxRounds: MAX_VOTE_ROUNDS };
+    sendToAll(payload);
+    showDeadlockScreen(payload);
+    return;
+  }
+
   const results = {
     defendants: state.caseData.defendants.map(d => {
       const sp = (state.lastSplits && state.lastSplits[d.id]) || { guilty: 0, notGuilty: 0, cast: 0 };
       return {
         id: d.id, name: d.name, verdict: finalVerdicts[d.id], trueOutcome: trueOutcomeOf(d),
         guilty: sp.guilty, notGuilty: sp.notGuilty, cast: sp.cast,
-        needed: sp.cast ? Math.ceil(sp.cast * VERDICT_RATIO) : 0
+        needed: sp.cast ? Math.floor(sp.cast * VERDICT_RATIO) + 1 : 0
       };
     }),
     players: state.roster.map(p => {
@@ -4009,11 +4460,102 @@ function resolveGame() {
       const myVoteSet = state.votes[p.id] || {};
       const heldInContempt = Object.values(myVoteSet).some(v => v === 'contempt');
       return { id: p.id, name: p.name, roleId, roleName: role.name, achieved, heldInContempt };
-    })
+    }),
+    recap: buildRecap(finalVerdicts)
   };
   sendToAll({ type: 'results', results });
   showResultsScreen(results);
 }
+
+function showDeadlockScreen(data) {
+  stopTurns();
+  clearInterval(voteTimerInterval);
+  const wrap = document.getElementById('dl-splits');
+  wrap.innerHTML = '';
+  data.splits.forEach(sp => {
+    const block = document.createElement('div');
+    block.className = 'verdict-result';
+    const name = document.createElement('div');
+    name.className = 'defendant-name';
+    name.textContent = sp.name;
+    const tally = document.createElement('div');
+    tally.textContent = sp.verdict === 'hung'
+      ? `${sp.guilty} guilty · ${sp.notGuilty} not guilty · ${sp.needed} needed`
+      : 'Decided: ' + verdictLabel(sp.verdict);
+    const note = document.createElement('div');
+    note.className = 'rr-role';
+    note.style.marginTop = '3px';
+    note.textContent = sp.verdict === 'hung' ? 'No side reached the threshold.' : '';
+    block.appendChild(name); block.appendChild(tally); block.appendChild(note);
+    wrap.appendChild(block);
+  });
+
+  document.getElementById('dl-round').textContent = `Ballot ${data.round} of ${data.maxRounds}`;
+  let g = 0, ng = 0, open = 0;
+  state.roster.forEach(p => {
+    const v = (state.lean && state.lean[p.id]) || 0;
+    if (v > 0.15) g++; else if (v < -0.15) ng++; else open++;
+  });
+  document.getElementById('dl-room-read').textContent =
+    `Leaning guilty ${g} · undecided ${open} · leaning not guilty ${ng}`;
+  document.getElementById('dl-host-controls').style.display = state.isHost ? 'block' : 'none';
+  document.getElementById('dl-status').textContent = state.isHost
+    ? 'Send them back and try to break the tie. Nothing has been revealed.'
+    : 'Waiting for the host to send the jury back…';
+
+  playSound('gavel');
+  showScreen('screen-deadlock');
+}
+
+// Host sends the jury back for another round of argument, then another ballot.
+function reDeliberate() {
+  if (!state.isHost) return;
+  state.voteRound++;
+  state.votes = {};
+  state.voteLog = [];
+  state.influence = {};   // fresh ears: the same arguments can land again
+  sendToAll({ type: 'phase', phase: 'deliberate' });
+  showDeliberateScreen();
+  startDeliberationTurns();
+  showToast('Second round of deliberation. Convictions carried over.', 'info');
+}
+
+/* ============ SECTION: POST-GAME RECAP ============
+   Persuasion generates a story, and it was being thrown away. This turns the
+   sway log into a few lines about how the room actually got there.
+*/
+function buildRecap(finalVerdicts) {
+  const lines = [];
+  const nameOf = id => { const p = state.roster.find(x => x.id === id); return p ? p.name : 'Someone'; };
+  const log = state.swayLog || [];
+
+  // Flips are the headline: someone who crossed from one side to the other.
+  const flips = log.filter(e => e.flipped);
+  flips.slice(-3).forEach(e => {
+    lines.push(`${nameOf(e.targetId)} crossed to ${e.to > 0 ? 'guilty' : 'not guilty'} after ${e.speakerId === e.targetId ? 'thinking it over' : nameOf(e.speakerId) + ' pressed them'} in round ${e.round}.`);
+  });
+
+  // Who did the most work on the room.
+  const tally = {};
+  log.forEach(e => {
+    if (e.speakerId === e.targetId) return;
+    tally[e.speakerId] = (tally[e.speakerId] || 0) + Math.abs(e.to - e.from);
+  });
+  const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+  if (top && top[1] > 0.15) lines.push(`${nameOf(top[0])} shifted the room more than anyone else.`);
+
+  // Anyone who sat through all of it unmoved.
+  const unmoved = state.roster.filter(p => !log.some(e => e.targetId === p.id && Math.abs(e.to - e.from) > 0.05));
+  if (unmoved.length && unmoved.length < state.roster.length) {
+    lines.push(`${unmoved.map(p => p.name).join(', ')} never budged.`);
+  }
+
+  if (state.voteRound > 1) lines.unshift(`It took ${state.voteRound} ballots to get here.`);
+  if (!log.length) lines.push('Nobody moved anybody. The room voted as it arrived.');
+  return lines.slice(0, 5);
+}
+
+/* ============ SECTION: RESULTS ============ */
 
 function verdictLabel(v) {
   if (v === 'guilty') return 'Guilty';
@@ -4063,6 +4605,21 @@ function showResultsScreen(results) {
     rolesWrap.appendChild(li);
   });
 
+  const recapWrap = document.getElementById('res-recap-wrap');
+  const recapList = document.getElementById('res-recap');
+  recapList.innerHTML = '';
+  const recap = results.recap || [];
+  if (recap.length) {
+    recapWrap.style.display = 'block';
+    recap.forEach(line => {
+      const li = document.createElement('li');
+      li.textContent = line;
+      recapList.appendChild(li);
+    });
+  } else {
+    recapWrap.style.display = 'none';
+  }
+
   document.getElementById('res-host-controls').style.display = state.isHost ? 'block' : 'none';
   showScreen('screen-results');
 }
@@ -4087,6 +4644,10 @@ function returnToLobby() {
   state.chatTarget = null;
   state.chatWhisper = false;
   state.chatCategory = 'role';
+  state.chatEvidence = null;
+  state.swayLog = [];
+  state.voteRound = 1;
+  state.lean = {};
   resetChatUI();
   document.getElementById('btn-copy-sealed').style.display = 'none';
   document.getElementById('case-status').textContent = 'No case loaded yet.';
@@ -4124,6 +4685,10 @@ function leaveRoom() {
   state.botBias = {};
   state.myVotes = {};
   state.chatLog = [];
+  state.chatEvidence = null;
+  state.swayLog = [];
+  state.voteRound = 1;
+  state.lean = {};
   botCounter = 0;
   resetChatUI();
   document.getElementById('lobby-tag').style.display = 'none';
@@ -4326,6 +4891,13 @@ document.getElementById('btn-chat-target').onclick = cycleChatTarget;
 document.getElementById('btn-chat-whisper').onclick = toggleWhisper;
 document.getElementById('btn-chat-style').onclick = cycleChatStyle;
 document.getElementById('btn-chat-send').onclick = sendCustomChat;
+document.getElementById('btn-chat-evidence').onclick = openEvidenceAttach;
+document.getElementById('btn-redeliberate').onclick = reDeliberate;
+document.getElementById('btn-accept-hung').onclick = () => {
+  // Skip the extra round and let the deadlock stand.
+  state.voteRound = MAX_VOTE_ROUNDS;
+  resolveGame();
+};
 
 const chatInput = document.getElementById('chat-input');
 chatInput.addEventListener('input', () => {
