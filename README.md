@@ -9,7 +9,9 @@ Inspired by Mafia and One Night Ultimate Werewolf, dressed as a courtroom.
 - **No backend.** One HTML file on static hosting. Players connect directly to
   each other over WebRTC.
 - **Mobile first.** Share a link, everyone taps it, the game is on.
-- **1 player or 8.** AI jurors fill empty seats and actually argue with you.
+- **1 player or 8.** AI jurors fill empty seats, take their turn, and argue back.
+- **Turn-based round table.** One juror speaks at a time; pointing at someone
+  draws a line across the table.
 - **AI-generated cases.** Build a prompt in-app, paste it into ChatGPT or
   Gemini, paste the JSON back.
 
@@ -89,7 +91,7 @@ code manually.
 | **Role reveal** | Your role appears on a wax seal. Private. Don't share it. |
 | **The trial** | The judge convenes, then both sides argue. Tap to advance. Counsel sometimes objects. |
 | **Evidence** | Case summary, both statements, shared evidence, and any private evidence only you hold. |
-| **Deliberation** | Argue it out — in person, on a call, or in chat. Host calls the vote. |
+| **Deliberation** | Jurors take turns at a round table. One speaks at a time. Host calls the vote. |
 | **The vote** | Verdicts post live as they're cast. 90-second clock. |
 | **Verdict** | Vote split, the real outcome, and every player's role and whether they hit their goal. |
 
@@ -191,6 +193,36 @@ exhibit.
 > **Whispers are not private from the host.** The host relays every message, so
 > other players can't see your whisper but whoever is hosting can. Unavoidable in
 > a host-relay design without adding encryption.
+
+### Turn-based deliberation
+
+Deliberation happens at a **round table**. Everyone sits in a ring, each with
+their own colour, and exactly one juror holds the floor at a time.
+
+- You get **24 seconds** and **one message** per turn.
+- Speak and the floor passes on immediately.
+- Say nothing and you're marked **passed** — you forfeit that round's slot.
+- Turns cycle continuously in rounds until the host calls the vote.
+- **AI jurors only speak on their own turn**, which is what keeps them from
+  burying the conversation.
+- **Whispering is always allowed**, even when it isn't your turn. It's private
+  side-talk, not the floor.
+
+Address someone and a **coloured line arcs across the table** from your seat to
+theirs, with an arrowhead — so the whole room can see who is pointing at whom.
+The newest line is solid; older ones fade and go dashed. Each juror's most
+recent remark floats as a bubble beside their seat.
+
+Address a bot directly and it will answer **you** when the floor reaches it.
+
+Tune it with `TURN_SECONDS`.
+
+### Re-examining the evidence
+
+**Re-examine the case file** appears on both the deliberation and vote screens.
+It reopens the full case — summary, both statements, all shared evidence, and
+your own private evidence — without losing your place. Emphasis markup is
+stripped so it reads as a plain document rather than a performance.
 
 ---
 
@@ -347,9 +379,8 @@ All near the top of the `<script>` in `index.html`.
 | `MIN_PLAYERS` | `4` | Jurors required to start (bots count) |
 | `MAX_PLAYERS` | `8` | Seats in the jury box |
 | `VOTE_SECONDS` | `90` | Clock before contempt |
-| `DELIBERATION_SECONDS` | `300` | Suggested time, display only |
+| `TURN_SECONDS` | `24` | Length of one juror's turn at the table |
 | `ROLE_COUNTS_BY_PLAYERS` | `{4:2 … 8:4}` | Special roles per jury size |
-| `BOT_CHAT_MIN_MS` / `MAX_MS` | `3500` / `11000` | How often AI jurors speak |
 | `CHAT_MIN_INTERVAL_MS` | `1100` | Chat rate limit |
 | `CODE_LENGTH` | `4` | Room code length |
 | `REGISTRATION_BUDGET` | `4` per 60s | Connection attempts before cooldown |
@@ -543,6 +574,8 @@ Being straight about what doesn't work:
 - **Sealed outcomes are obfuscated, not encrypted.** A static-file game can't
   keep a secret from someone with devtools.
 - **Single voting round.** No re-argue-and-revote after a hung jury.
+- **The round table is built for 8.** The colour palette and seat spacing assume
+  the 8-seat maximum; raising `MAX_PLAYERS` needs more colours and smaller seats.
 - **Needs internet even for solo play** — PeerJS and fonts load from CDNs, and a
   room is opened even in solo mode.
 - **Free-tier cold starts.** A self-hosted server on a free plan may take ~50s to
@@ -558,6 +591,3 @@ Being straight about what doesn't work:
 - Sounds synthesized in-browser with the Web Audio API — no samples
 - Cases are fiction. Any "based on a real case" content is fictionalized by
   instruction to the model; names and details are invented.
-  
-## License
-This game's code, art, and assets are licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0). See the LICENSE file for details.

@@ -454,6 +454,100 @@
     border:1px dashed #8F76A8; background:rgba(92,74,110,.22);
   }
   .chat-msg.whisper .chat-msg-to{ color:#C0A6D4; }
+
+  /* ============ ROUND TABLE ============
+     Jurors sit in a ring. The active speaker lights up, recent lines float as
+     bubbles, and addressing someone draws a line across the table in your
+     colour so the room can see who is pointing at whom. */
+  .table-wrap{
+    position:relative; width:100%; max-width:400px; margin:0 auto 14px;
+    aspect-ratio:1/1;
+  }
+  .table-lines{ position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .table-felt{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:46%; height:46%; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%, #2C323D, #1C1F26 70%);
+    border:1px solid var(--ink-line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:8px;
+  }
+  .table-felt .tf-label{ font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); }
+  .table-felt .tf-name{ font-family:"Fraunces",Georgia,serif; font-size:14px; font-weight:600; line-height:1.15; margin:3px 0; }
+  .table-felt .tf-clock{ font-family:"IBM Plex Mono",monospace; font-size:19px; font-weight:600; color:var(--brass); }
+  .table-felt .tf-clock.low{ color:var(--redline-lit); }
+  .table-felt .tf-round{ font-size:9px; color:var(--text-dim); margin-top:2px; }
+
+  .seat{
+    position:absolute; transform:translate(-50%,-50%);
+    width:64px; text-align:center; transition:opacity .25s;
+  }
+  .seat-fig{
+    width:38px; height:38px; margin:0 auto 3px; border-radius:50%;
+    background:var(--ink-soft); border:2px solid var(--ink-line);
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .25s, box-shadow .25s, border-color .25s;
+  }
+  .seat-fig svg{ width:22px; height:22px; display:block; }
+  .seat-name{
+    font-size:9.5px; line-height:1.15; color:var(--text-dim);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .seat.active .seat-fig{ transform:scale(1.28); }
+  .seat.active .seat-name{ color:var(--text-light); font-weight:600; }
+  .seat.me .seat-name::after{ content:" (you)"; color:var(--brass); font-weight:400; }
+  .seat.done{ opacity:.45; }
+  .seat-tag{
+    font-size:8.5px; letter-spacing:.08em; text-transform:uppercase;
+    margin-top:1px; min-height:10px;
+  }
+  .seat-tag.passed{ color:var(--redline-lit); }
+  .seat-tag.spoke{ color:var(--brass-dim); }
+  @keyframes seatPulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(184,147,74,0); }
+    50%{ box-shadow:0 0 0 7px rgba(184,147,74,.22); }
+  }
+  .seat.active .seat-fig{ animation:seatPulse 1.5s ease-in-out infinite; }
+
+  .bubble{
+    position:absolute; transform:translate(-50%,-50%);
+    max-width:118px; padding:5px 8px; border-radius:9px;
+    background:var(--ink-soft); border:1px solid var(--ink-line);
+    font-size:10.5px; line-height:1.3; color:var(--text-light);
+    pointer-events:none; animation:bubbleIn .3s ease-out;
+  }
+  .bubble.slam{ font-weight:600; }
+  .bubble.sarcasm{ font-style:italic; }
+  @keyframes bubbleIn{ from{ opacity:0; transform:translate(-50%,-50%) scale(.85); } to{ opacity:1; } }
+
+  .turn-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    border:1px solid var(--ink-line); border-left:3px solid var(--ink-line);
+    border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:13px;
+  }
+  .turn-banner.mine{ border-left-color:var(--brass); background:rgba(184,147,74,.1); }
+  .turn-banner .tb-text{ flex:1; }
+
+  /* ============ CASE FILE SHEET ============ */
+  .sheet-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:32;
+    display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .sheet-overlay.open{ opacity:1; pointer-events:auto; }
+  .sheet-panel{
+    width:100%; max-width:480px; height:88vh; background:var(--ink);
+    border-radius:16px 16px 0 0; border-top:1px solid var(--ink-line);
+    display:flex; flex-direction:column;
+    transform:translateY(14px); transition:transform .2s;
+  }
+  .sheet-overlay.open .sheet-panel{ transform:translateY(0); }
+  .sheet-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:15px 20px; border-bottom:1px solid var(--ink-line);
+    font-family:"Fraunces",Georgia,serif; font-size:17px; font-weight:600;
+  }
+  .sheet-body{ flex:1; overflow-y:auto; padding:16px 20px max(24px,env(safe-area-inset-bottom)); }
 </style>
 </head>
 <body>
@@ -711,11 +805,23 @@
     <span class="rc-more">Role</span>
   </button>
   <h2>The floor is open</h2>
-  <p class="subhead" style="max-width:none;">Argue your case — in the room, on a call, or right here in chat.</p>
-  <div class="vote-timer-row"><span class="status" style="margin:0;">Suggested time</span><span class="mono" id="delib-timer">--:--</span></div>
-  <div class="sec-head">The room</div>
-  <div class="chat-preview" id="delib-chat-preview"><div class="cp-empty">Nobody has spoken yet.</div></div>
+
+  <div class="turn-banner" id="turn-banner">
+    <span class="tb-text" id="turn-text">Waiting for the floor…</span>
+  </div>
+
+  <div class="table-wrap" id="round-table">
+    <svg class="table-lines" id="table-lines" viewBox="0 0 100 100" aria-hidden="true"></svg>
+    <div class="table-felt">
+      <div class="tf-label" id="tf-label">Speaking</div>
+      <div class="tf-name" id="tf-name">—</div>
+      <div class="tf-clock" id="tf-clock">--</div>
+      <div class="tf-round" id="tf-round"></div>
+    </div>
+  </div>
+
   <button class="btn btn-primary" id="btn-delib-chat">Speak up</button>
+  <button class="btn btn-secondary" id="btn-delib-casefile">Re-examine the case file</button>
   <div class="spacer"></div>
   <div id="delib-host-controls" style="display:none;"><button class="btn btn-primary" id="btn-call-vote">Call the vote</button></div>
   <p class="status" id="delib-status">Waiting for the host to call the vote…</p>
@@ -738,6 +844,7 @@
   <ul class="roster" id="vote-live-list"></ul>
   <div id="vote-defendants"></div>
   <button class="btn btn-primary" id="btn-submit-vote">Submit vote</button>
+  <button class="btn btn-secondary" id="btn-vote-casefile">Re-examine the case file</button>
   <p class="status" id="vote-status"></p>
   <div class="spacer"></div>
   <div id="vote-host-controls" style="display:none;"><button class="btn btn-secondary btn-small" id="btn-force-tally">Tally now (skip stragglers)</button></div>
@@ -776,6 +883,24 @@
       <div class="chat-tabs" id="chat-tabs"></div>
       <div class="chat-phrases" id="chat-phrases"></div>
       <div class="chat-evidence-picker" id="chat-evidence-picker" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-overlay" id="casefile-overlay">
+  <div class="sheet-panel">
+    <div class="sheet-header"><span>Case file</span><button class="chat-close" id="btn-casefile-close">Close</button></div>
+    <div class="sheet-body">
+      <h2 id="cf-title" style="font-size:19px;">—</h2>
+      <p class="subhead" id="cf-summary" style="max-width:none; margin-bottom:20px;"></p>
+      <div class="statement"><div class="statement-label">Prosecution</div><p id="cf-prosecution"></p></div>
+      <div class="statement"><div class="statement-label">Defense</div><p id="cf-defense"></p></div>
+      <div class="sec-head">Evidence on the table</div>
+      <ul class="evidence-list" id="cf-public-list"></ul>
+      <div id="cf-private-wrap" style="display:none;">
+        <div class="sec-head">Only you have this</div>
+        <div id="cf-private-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -930,7 +1055,6 @@ function checkEnvironment() {
   return null;
 }
 const VOTE_SECONDS = 90;          // tunable: how long the room gets to vote before contempt kicks in
-const DELIBERATION_SECONDS = 300; // tunable: informational only — host still controls when to call the vote
 // A real jury needs unanimity, which makes this game nearly unwinnable: two
 // opposed roles can hang every case single-handedly. A verdict here needs 60%
 // of the ballots actually cast instead. Tuned by simulation — unanimity gave
@@ -1489,11 +1613,14 @@ const state = {
   chatWhisper: false,
   chatStyle: 'flow',
   chatCategory: 'role',
+  turn: null,             // { order, index, round, deadline, spoke, passed }
+  botOwes: {},            // botId -> playerId who addressed it, answered on the bot's turn
   chatLog: []
 };
 let voteTimerInterval = null;
-let delibTimerInterval = null;
 let botChatTimers = [];
+let turnTicker = null;
+let botTurnTimer = null;
 let chatUnread = 0;
 
 /* ============ SECTION: LOGGING / TOAST ============ */
@@ -1894,10 +2021,16 @@ function handleHostMessage(conn, data) {
       style: ['slam', 'sarcasm'].includes(data.style) ? data.style : 'flow',
       to, toName, whisper: !!(data.whisper && to)
     };
-    // The host only sees a whisper locally if it was aimed at them.
+    // While the floor is being taken in turns, only the current speaker is
+    // heard. Whispers are exempt — they're private side-talk, not the floor.
+    if (state.turn && !msg.whisper && currentSpeakerId() !== conn.peer) {
+      try { conn.send({ type: 'turn-denied' }); } catch (e) { /* ignore */ }
+      return;
+    }
     if (!msg.whisper || msg.to === 'host') appendChatMessage(msg);
     relayChat(msg);
-    maybeProvokeBotReply(msg.to, msg.text);
+    noteBotAddressed(msg.to, conn.peer);
+    if (!msg.whisper) consumeTurn(conn.peer);
   }
 }
 
@@ -2158,6 +2291,10 @@ function handleClientMessage(data) {
   if (!data || typeof data !== 'object') return;
   log('recv from host: ' + data.type);
 
+  if (data.type === 'turn-denied') {
+    showError('Not your turn — the floor has moved on.');
+    return;
+  }
   if (data.type === 'ping') {
     if (state.hostConn && state.hostConn.open) {
       try { state.hostConn.send({ type: 'pong' }); } catch (e) { /* ignore */ }
@@ -2184,6 +2321,9 @@ function handleClientMessage(data) {
     if (data.phase === 'deliberate') showDeliberateScreen();
     else if (data.phase === 'vote') showVoteScreen(data.deadline);
     else if (data.phase === 'lobby') returnToLobby();
+  } else if (data.type === 'turn') {
+    state.turn = { order: data.order, index: data.index, round: data.round, deadline: data.deadline, spoke: data.spoke || {}, passed: data.passed || {} };
+    applyTurn();
   } else if (data.type === 'vote-cast') {
     renderLiveVotes(data);
   } else if (data.type === 'results') {
@@ -2335,24 +2475,12 @@ function showEvidenceScreen() {
 
 function showDeliberateScreen() {
   renderRoleChips();
-  renderChatPreview();
+  renderRoundTable();
+  renderTurnBanner();
   document.getElementById('delib-host-controls').style.display = state.isHost ? 'block' : 'none';
   document.getElementById('delib-status').textContent = state.isHost
     ? 'Call the vote whenever the room is ready.'
     : 'Waiting for the host to call the vote…';
-
-  const deadline = Date.now() + DELIBERATION_SECONDS * 1000;
-  clearInterval(delibTimerInterval);
-  const tick = () => {
-    const remaining = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-    const mm = Math.floor(remaining / 60), ss = String(remaining % 60).padStart(2, '0');
-    const el = document.getElementById('delib-timer');
-    el.textContent = mm + ':' + ss;
-    el.style.color = remaining === 0 ? 'var(--redline)' : '';
-    if (remaining === 0) clearInterval(delibTimerInterval);
-  };
-  tick();
-  delibTimerInterval = setInterval(tick, 1000);
 
   setChatVisible(true);
   showScreen('screen-deliberate');
@@ -2920,29 +3048,350 @@ function wireRoleChips() {
   });
 }
 
-function renderChatPreview() {
-  const wrap = document.getElementById('delib-chat-preview');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  const recent = state.chatLog.slice(-3);
-  if (!recent.length) {
-    const e = document.createElement('div');
-    e.className = 'cp-empty';
-    e.textContent = 'Nobody has spoken yet.';
-    wrap.appendChild(e);
+/* ============ SECTION: ROUND TABLE & TURN ORDER ============
+   Deliberation is turn-based. Free-for-all chat meant the AI jurors buried
+   everyone else, and there was no way to follow who was answering whom. Now
+   exactly one juror holds the floor, gets TURN_SECONDS to say one thing, and
+   forfeits the slot if they sit on it. Bots only speak on their own turn.
+*/
+const TURN_SECONDS = 24;
+
+// One colour per seat, used for the silhouette ring and for the line drawn
+// across the table when that juror addresses someone.
+const SEAT_COLORS = [
+  '#B8934A', // brass
+  '#E0837B', // red
+  '#8FB6C7', // ice
+  '#C9A0C0', // mauve
+  '#93B08A', // sage
+  '#D9A85C', // amber
+  '#7FB3AD', // teal
+  '#CE8FA0'  // rose
+];
+
+function seatColor(playerId) {
+  const i = state.roster.findIndex(p => p.id === playerId);
+  return SEAT_COLORS[(i < 0 ? 0 : i) % SEAT_COLORS.length];
+}
+
+/* --- host-side turn control --- */
+function startDeliberationTurns() {
+  if (!state.isHost) return;
+  state.turn = {
+    order: state.roster.map(p => p.id),
+    index: 0,
+    round: 1,
+    deadline: Date.now() + TURN_SECONDS * 1000,
+    spoke: {},
+    passed: {}
+  };
+  broadcastTurn();
+  applyTurn();
+}
+
+function broadcastTurn() {
+  if (!state.isHost || !state.turn) return;
+  const t = state.turn;
+  sendToAll({ type: 'turn', order: t.order, index: t.index, round: t.round, deadline: t.deadline, spoke: t.spoke, passed: t.passed });
+}
+
+function currentSpeakerId() {
+  const t = state.turn;
+  if (!t || !t.order.length) return null;
+  return t.order[t.index % t.order.length];
+}
+
+function isMyTurn() {
+  return !!state.turn && currentSpeakerId() === state.myId;
+}
+
+// Called on host and clients alike; only the host owns the clock and advancing.
+function applyTurn() {
+  clearInterval(turnTicker);
+  clearTimeout(botTurnTimer);
+  renderRoundTable();
+  renderTurnBanner();
+
+  turnTicker = setInterval(() => {
+    renderTurnClock();
+    if (state.isHost && state.turn && Date.now() > state.turn.deadline) {
+      // Sat on it too long — the floor moves on.
+      const who = currentSpeakerId();
+      state.turn.passed[who] = true;
+      log('Turn forfeited by ' + who);
+      advanceTurn();
+    }
+  }, 250);
+  renderTurnClock();
+
+  // A bot on the clock speaks once, part way through its slot.
+  const speaker = state.roster.find(p => p.id === currentSpeakerId());
+  if (state.isHost && speaker && speaker.isBot) {
+    botTurnTimer = setTimeout(() => botTakeTurn(speaker), 1600 + Math.random() * 3200);
+  }
+}
+
+function advanceTurn() {
+  if (!state.isHost || !state.turn) return;
+  const t = state.turn;
+  t.index++;
+  if (t.index >= t.order.length) {
+    t.index = 0;
+    t.round++;
+    t.spoke = {};
+    t.passed = {};
+  }
+  t.deadline = Date.now() + TURN_SECONDS * 1000;
+  broadcastTurn();
+  applyTurn();
+}
+
+// Host records that the speaker used their turn, then passes the floor on.
+function consumeTurn(playerId) {
+  if (!state.isHost || !state.turn) return;
+  if (currentSpeakerId() !== playerId) return;
+  state.turn.spoke[playerId] = true;
+  setTimeout(advanceTurn, 700); // let the line land before the floor moves
+}
+
+function botTakeTurn(bot) {
+  if (!state.isHost || !state.turn) return;
+  if (currentSpeakerId() !== bot.id) return;
+  const roleId = state.roleAssignment[bot.id];
+  const pool = (CHAT_PHRASES.roles[roleId] || []).concat(
+    CHAT_PHRASES.categories.doubt, CHAT_PHRASES.categories.press,
+    CHAT_PHRASES.categories.react, CHAT_PHRASES.categories.close);
+  if (!pool.length) { advanceTurn(); return; }
+
+  const phrase = pool[Math.floor(Math.random() * pool.length)];
+  // Bots sometimes address a specific juror, which is what draws the line.
+  const others = state.roster.filter(p => p.id !== bot.id);
+  // If someone put a question to this bot, it answers them first.
+  const owed = state.botOwes && state.botOwes[bot.id];
+  const owedPlayer = owed ? state.roster.find(p => p.id === owed) : null;
+  const wantsTarget = !!owedPlayer || phrase.text.includes('{target}') || Math.random() < 0.3;
+  const target = owedPlayer || (wantsTarget && others.length ? others[Math.floor(Math.random() * others.length)] : null);
+  if (owedPlayer && state.botOwes) delete state.botOwes[bot.id];
+
+  let text = phrase.text
+    .replace('{defendant}', (state.publicCase && state.publicCase.defendants[0].name) || 'the defendant')
+    .replace('{target}', target ? target.name : 'everyone');
+  if (text.includes('{evidence}')) {
+    const opts = ((state.publicCase && state.publicCase.publicEvidence) || [])
+      .concat((state.botEvidence && state.botEvidence[bot.id]) || []);
+    const pick = opts.length ? opts[Math.floor(Math.random() * opts.length)] : null;
+    text = text.replace('{evidence}', pick ? (pick.title || 'that evidence').toLowerCase() : 'the evidence');
+  }
+
+  const msg = {
+    from: bot.id, name: bot.name, text, style: phrase.style,
+    to: target ? target.id : null, toName: target ? target.name : null, whisper: false
+  };
+  appendChatMessage(msg);
+  relayChat(msg);
+  consumeTurn(bot.id);
+}
+
+/* --- rendering --- */
+function renderTurnBanner() {
+  const banner = document.getElementById('turn-banner');
+  const text = document.getElementById('turn-text');
+  if (!state.turn) {
+    banner.classList.remove('mine');
+    text.textContent = 'Waiting for the floor…';
     return;
   }
-  recent.forEach(m => {
-    const line = document.createElement('div');
-    line.className = 'cp-line';
-    const who = document.createElement('span');
-    who.className = 'cp-who';
-    const addressed = m.to ? ' \u2192 ' + (m.to === state.myId ? 'you' : (m.toName || '')) : '';
-    who.textContent = m.name + addressed + ': ';
-    line.appendChild(who);
-    line.appendChild(document.createTextNode(m.text));
-    wrap.appendChild(line);
+  const speaker = state.roster.find(p => p.id === currentSpeakerId());
+  const mine = isMyTurn();
+  banner.classList.toggle('mine', mine);
+  text.textContent = mine
+    ? 'You have the floor. Say one thing.'
+    : (speaker ? speaker.name + ' has the floor.' : 'Waiting…');
+  document.getElementById('btn-delib-chat').textContent = mine ? 'Speak now' : 'Open chat (not your turn)';
+}
+
+function renderTurnClock() {
+  if (!state.turn) return;
+  const left = Math.max(0, Math.ceil((state.turn.deadline - Date.now()) / 1000));
+  const clock = document.getElementById('tf-clock');
+  clock.textContent = left + 's';
+  clock.classList.toggle('low', left <= 6);
+  const speaker = state.roster.find(p => p.id === currentSpeakerId());
+  document.getElementById('tf-name').textContent = speaker ? speaker.name : '—';
+  document.getElementById('tf-label').textContent = isMyTurn() ? 'Your turn' : 'Speaking';
+  document.getElementById('tf-round').textContent = 'Round ' + state.turn.round;
+}
+
+// Head-and-shoulders silhouette, tinted to the juror's seat colour.
+function seatSilhouette(color) {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="8" r="4.4" fill="${color}"/>
+    <path d="M2.6 24c0-5.4 4.2-9.2 9.4-9.2s9.4 3.8 9.4 9.2z" fill="${color}"/>
+  </svg>`;
+}
+
+function seatPosition(i, n) {
+  // Start at the bottom so "you" reads as nearest the viewer, then go clockwise.
+  const angle = (Math.PI / 2) + (i / n) * Math.PI * 2;
+  return { x: 50 + 38 * Math.cos(angle), y: 50 + 38 * Math.sin(angle) };
+}
+
+function renderRoundTable() {
+  const wrap = document.getElementById('round-table');
+  if (!wrap) return;
+  wrap.querySelectorAll('.seat, .bubble').forEach(el => el.remove());
+
+  const n = state.roster.length;
+  const speakerId = currentSpeakerId();
+  // Only the three most recent speakers keep a bubble, or the ring gets noisy.
+  const recent = state.chatLog.slice(-3).reverse();
+
+  state.roster.forEach((p, i) => {
+    const pos = seatPosition(i, n);
+    const color = seatColor(p.id);
+
+    const seat = document.createElement('div');
+    seat.className = 'seat'
+      + (p.id === speakerId ? ' active' : '')
+      + (p.id === state.myId ? ' me' : '')
+      + (state.turn && (state.turn.spoke[p.id] || state.turn.passed[p.id]) ? ' done' : '');
+    seat.style.left = pos.x + '%';
+    seat.style.top = pos.y + '%';
+
+    const fig = document.createElement('div');
+    fig.className = 'seat-fig';
+    fig.style.borderColor = color;
+    fig.innerHTML = seatSilhouette(color); // trusted: colour is from our own palette
+    seat.appendChild(fig);
+
+    const name = document.createElement('div');
+    name.className = 'seat-name';
+    name.textContent = p.name; // textContent — names are untrusted input
+    seat.appendChild(name);
+
+    const tag = document.createElement('div');
+    tag.className = 'seat-tag';
+    if (state.turn && state.turn.passed[p.id]) { tag.textContent = 'passed'; tag.classList.add('passed'); }
+    else if (state.turn && state.turn.spoke[p.id]) { tag.textContent = 'spoke'; tag.classList.add('spoke'); }
+    seat.appendChild(tag);
+
+    wrap.appendChild(seat);
+
+    // Their latest line, pulled toward the middle of the table.
+    const line = recent.find(m => m.from === p.id && !m.whisper);
+    if (line) {
+      const b = document.createElement('div');
+      b.className = 'bubble' + (line.style === 'slam' ? ' slam' : line.style === 'sarcasm' ? ' sarcasm' : '');
+      b.textContent = line.text.length > 62 ? line.text.slice(0, 60) + '…' : line.text;
+      b.style.borderColor = color;
+      const bp = { x: 50 + 19 * Math.cos((Math.PI / 2) + (i / n) * Math.PI * 2),
+                   y: 50 + 19 * Math.sin((Math.PI / 2) + (i / n) * Math.PI * 2) };
+      b.style.left = bp.x + '%';
+      b.style.top = bp.y + '%';
+      wrap.appendChild(b);
+    }
   });
+
+  redrawPointerLines();
+}
+
+/* Lines across the table for anyone who addressed someone recently. */
+function redrawPointerLines() {
+  const svg = document.getElementById('table-lines');
+  if (!svg) return;
+  svg.innerHTML = '';
+  const n = state.roster.length;
+  const idx = id => state.roster.findIndex(p => p.id === id);
+
+  state.chatLog.slice(-4).forEach((m, k, arr) => {
+    if (!m.to || m.whisper) return;
+    const a = idx(m.from), b = idx(m.to);
+    if (a < 0 || b < 0 || a === b) return;
+    const p1 = seatPosition(a, n), p2 = seatPosition(b, n);
+    const color = seatColor(m.from);
+    const age = arr.length - k;              // 1 = newest
+    const opacity = Math.max(0.18, 1 - (age - 1) * 0.26);
+
+    // Bow the line through the middle so crossing lines stay readable.
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    const cx = mx + (50 - mx) * 0.45, cy = my + (50 - my) * 0.45;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${p1.x},${p1.y} Q${cx},${cy} ${p2.x},${p2.y}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', age === 1 ? '1.1' : '0.7');
+    path.setAttribute('stroke-opacity', String(opacity));
+    path.setAttribute('stroke-linecap', 'round');
+    if (age > 1) path.setAttribute('stroke-dasharray', '2 2');
+    svg.appendChild(path);
+
+    // Arrowhead at the receiving end.
+    const ang = Math.atan2(p2.y - cy, p2.x - cx);
+    const tipX = p2.x - Math.cos(ang) * 4.5, tipY = p2.y - Math.sin(ang) * 4.5;
+    const head = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    const w = 1.9;
+    head.setAttribute('points', [
+      [tipX + Math.cos(ang) * 3.4, tipY + Math.sin(ang) * 3.4],
+      [tipX + Math.cos(ang + 2.4) * w, tipY + Math.sin(ang + 2.4) * w],
+      [tipX + Math.cos(ang - 2.4) * w, tipY + Math.sin(ang - 2.4) * w]
+    ].map(pt => pt[0].toFixed(1) + ',' + pt[1].toFixed(1)).join(' '));
+    head.setAttribute('fill', color);
+    head.setAttribute('fill-opacity', String(opacity));
+    svg.appendChild(head);
+  });
+}
+
+/* ============ SECTION: CASE FILE (re-examine at any point) ============ */
+function renderEvidenceInto(ids) {
+  const c = state.publicCase;
+  if (!c) return;
+  document.getElementById(ids.title).textContent = c.title;
+  document.getElementById(ids.summary).textContent = c.summary;
+  document.getElementById(ids.pros).textContent = c.prosecutionStatement.replace(/[*_~]/g, '');
+  document.getElementById(ids.def).textContent = c.defenseStatement.replace(/[*_~]/g, '');
+
+  const list = document.getElementById(ids.publicList);
+  list.innerHTML = '';
+  c.publicEvidence.forEach(e => {
+    const li = document.createElement('li');
+    const t = document.createElement('div'); t.className = 'evidence-item-title'; t.textContent = e.title || 'Evidence';
+    const d = document.createElement('div'); d.className = 'evidence-item-desc'; d.textContent = e.description;
+    const f = document.createElement('div'); f.className = 'evidence-favor'; f.textContent = 'Favors: ' + e.favors;
+    li.appendChild(t); li.appendChild(d); li.appendChild(f);
+    list.appendChild(li);
+  });
+
+  const privWrap = document.getElementById(ids.privWrap);
+  const privList = document.getElementById(ids.privList);
+  privList.innerHTML = '';
+  const mine = state.myPersonalEvidence || [];
+  if (mine.length) {
+    privWrap.style.display = 'block';
+    mine.forEach(e => {
+      const card = document.createElement('div'); card.className = 'private-card';
+      const t = document.createElement('div'); t.className = 'evidence-item-title'; t.textContent = e.title || 'Evidence';
+      const d = document.createElement('div'); d.className = 'evidence-item-desc'; d.textContent = e.description;
+      card.appendChild(t); card.appendChild(d);
+      privList.appendChild(card);
+    });
+  } else {
+    privWrap.style.display = 'none';
+  }
+}
+
+function openCaseFile() {
+  if (!state.publicCase) { showError('No case loaded yet.'); return; }
+  renderEvidenceInto({
+    title: 'cf-title', summary: 'cf-summary', pros: 'cf-prosecution', def: 'cf-defense',
+    publicList: 'cf-public-list', privWrap: 'cf-private-wrap', privList: 'cf-private-list'
+  });
+  document.getElementById('casefile-overlay').classList.add('open');
+  playSound('tap');
+}
+
+function closeCaseFile() {
+  document.getElementById('casefile-overlay').classList.remove('open');
 }
 
 /* ============ SECTION: QUICK CHAT ============ */
@@ -2955,7 +3404,6 @@ function resetChatUI() {
   empty.id = 'chat-empty';
   empty.textContent = 'The room is quiet. Pick a line below to make your case.';
   feed.appendChild(empty);
-  renderChatPreview();
   setChatVisible(false);
 }
 
@@ -3152,12 +3600,20 @@ function sendChat(text, style) {
   const clean = String(text).slice(0, 240);
   const target = state.chatTarget || null;
   const whisper = !!(state.chatWhisper && target);
+
+  // Turn-based deliberation: wait your turn. Whispering is always allowed.
+  if (state.turn && !whisper && !isMyTurn()) {
+    const sp = state.roster.find(p => p.id === currentSpeakerId());
+    showError((sp ? sp.name + ' has the floor.' : 'Not your turn.') + ' You can still whisper.');
+    return false;
+  }
   const targetName = target ? (state.roster.find(p => p.id === target) || {}).name : null;
 
   if (state.isHost) {
     const msg = { from: state.myId, name: state.myName, text: clean, style, to: target, toName: targetName, whisper };
     appendChatMessage(msg);
     relayChat(msg);
+    if (!whisper) consumeTurn(state.myId);
   } else if (state.hostConn && state.hostConn.open) {
     state.hostConn.send({ type: 'chat', text: clean, style, to: target, whisper });
   } else {
@@ -3170,7 +3626,7 @@ function sendChat(text, style) {
     state.chatWhisper = false;
     renderComposeMeta();
   }
-  maybeProvokeBotReply(target, clean);
+  noteBotAddressed(target, state.myId);
   return true;
 }
 
@@ -3195,25 +3651,15 @@ function relayChat(msg) {
   state.connections.forEach(conn => { if (conn.open) conn.send(payload); });
 }
 
-// A bot that gets addressed directly answers back, which makes the AI seats
-// feel like they're in the conversation rather than talking past you.
-function maybeProvokeBotReply(targetId, incomingText) {
-  if (!state.isHost || !targetId) return;
+// Address a bot and it remembers. Replying instantly would jump the queue and
+// bring back the spam the turn system exists to prevent, so instead it answers
+// you when the floor reaches it.
+function noteBotAddressed(targetId, fromId) {
+  if (!state.isHost || !targetId || !fromId) return;
   const bot = state.roster.find(p => p.id === targetId && p.isBot);
   if (!bot) return;
-  const roleId = state.roleAssignment[bot.id];
-  const pool = (CHAT_PHRASES.roles[roleId] || []).concat(CHAT_PHRASES.categories.doubt, CHAT_PHRASES.categories.react);
-  if (!pool.length) return;
-  botChatTimers.push(setTimeout(() => {
-    const phrase = pool[Math.floor(Math.random() * pool.length)];
-    let text = phrase.text
-      .replace('{defendant}', (state.publicCase && state.publicCase.defendants[0].name) || 'the defendant')
-      .replace('{target}', state.myName)
-      .replace('{evidence}', 'the evidence');
-    const msg = { from: bot.id, name: bot.name, text, style: phrase.style, to: state.myId, toName: state.myName, whisper: false };
-    appendChatMessage(msg);
-    relayChat(msg);
-  }, 1400 + Math.random() * 2600));
+  state.botOwes = state.botOwes || {};
+  state.botOwes[bot.id] = fromId;
 }
 
 function appendChatMessage(msg) {
@@ -3248,7 +3694,9 @@ function appendChatMessage(msg) {
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
 
-  renderChatPreview();
+  if (document.getElementById('screen-deliberate').classList.contains('active')) {
+    renderRoundTable();
+  }
 
   if (msg.style === 'slam') {
     playSound('quake');
@@ -3415,40 +3863,17 @@ function botVote(botId, roleId) {
   return votes;
 }
 
-// Bots talk during deliberation, drawing on the same phrase bank players use.
-function startBotChatter() {
-  stopBotChatter();
-  state.roster.filter(p => p.isBot).forEach(p => {
-    const roleId = state.roleAssignment[p.id];
-    const speak = () => {
-      const pool = (CHAT_PHRASES.roles[roleId] || []).concat(CHAT_PHRASES.general);
-      if (!pool.length) return;
-      const phrase = pool[Math.floor(Math.random() * pool.length)];
-      let text = phrase.text;
-      const d = state.publicCase && state.publicCase.defendants[0];
-      text = text.replace('{defendant}', d ? d.name : 'the defendant');
-      if (text.includes('{evidence}')) {
-        const opts = ((state.publicCase && state.publicCase.publicEvidence) || [])
-          .concat((state.botEvidence && state.botEvidence[p.id]) || []);
-        const pick = opts.length ? opts[Math.floor(Math.random() * opts.length)] : null;
-        text = text.replace('{evidence}', pick ? (pick.title || 'that evidence').toLowerCase() : 'the evidence');
-      }
-      const msg = { from: p.id, name: p.name, text, style: phrase.style };
-      appendChatMessage(msg);
-      sendToAll({ type: 'chat', ...msg });
-      schedule();
-    };
-    const schedule = () => {
-      const delay = BOT_CHAT_MIN_MS + Math.random() * (BOT_CHAT_MAX_MS - BOT_CHAT_MIN_MS);
-      botChatTimers.push(setTimeout(speak, delay));
-    };
-    schedule();
-  });
-}
-
 function stopBotChatter() {
   botChatTimers.forEach(clearTimeout);
   botChatTimers = [];
+}
+
+function stopTurns() {
+  clearInterval(turnTicker);
+  clearTimeout(botTurnTimer);
+  turnTicker = null;
+  state.turn = null;
+  stopBotChatter();
 }
 
 function contemptVotes() {
@@ -3643,10 +4068,10 @@ function showResultsScreen(results) {
 }
 
 function returnToLobby() {
+  stopTurns();
   stopAmbience();
   clearTrialTimers();
   clearInterval(voteTimerInterval);
-  clearInterval(delibTimerInterval);
   stopBotChatter();
   state.roleAssignment = {};
   state.myRoleId = null;
@@ -3672,6 +4097,7 @@ function returnToLobby() {
 /* ============ SECTION: LEAVE ============ */
 function leaveRoom() {
   if (state.peer) state.peer.destroy();
+  stopTurns();
   stopKeepalive();
   clearTimeout(reviveTimer);
   state.roomOpened = false;
@@ -3679,7 +4105,6 @@ function leaveRoom() {
   stopAmbience();
   clearTrialTimers();
   clearInterval(voteTimerInterval);
-  clearInterval(delibTimerInterval);
   stopBotChatter();
   state.isHost = false;
   state.myId = null;
@@ -3841,13 +4266,13 @@ document.getElementById('btn-trial-skip').onclick = (e) => { e.stopPropagation()
 document.getElementById('btn-open-floor').onclick = () => {
   sendToAll({ type: 'phase', phase: 'deliberate' });
   showDeliberateScreen();
-  startBotChatter();
+  startDeliberationTurns();
 };
 
 document.getElementById('btn-call-vote').onclick = () => {
   state.votes = {};
   state.voteLog = [];
-  stopBotChatter();
+  stopTurns();
   const deadline = Date.now() + VOTE_SECONDS * 1000;
   sendToAll({ type: 'phase', phase: 'vote', deadline });
   showVoteScreen(deadline);
@@ -3889,6 +4314,13 @@ document.getElementById('btn-results-leave').onclick = leaveRoom;
 document.getElementById('btn-chat-open').onclick = openChat;
 document.getElementById('btn-delib-chat').onclick = openChat;
 wireRoleChips();
+
+document.getElementById('btn-delib-casefile').onclick = openCaseFile;
+document.getElementById('btn-vote-casefile').onclick = openCaseFile;
+document.getElementById('btn-casefile-close').onclick = closeCaseFile;
+document.getElementById('casefile-overlay').onclick = e => {
+  if (e.target.id === 'casefile-overlay') closeCaseFile();
+};
 
 document.getElementById('btn-chat-target').onclick = cycleChatTarget;
 document.getElementById('btn-chat-whisper').onclick = toggleWhisper;
