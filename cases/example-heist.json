@@ -1,0 +1,71 @@
+{
+  "caseId": "pack-heist-01",
+  "title": "State v. Devon Marsh",
+  "basedOn": "",
+  "contentWarnings": [
+    "theft",
+    "workplace conflict"
+  ],
+  "tone": "grounded",
+  "numDefendants": 1,
+  "defendants": [
+    {
+      "id": "d1",
+      "name": "Devon Marsh",
+      "trueOutcomeEnc": "DQAbFVkL"
+    }
+  ],
+  "summary": "A rare 19th-century watch vanished from the Hallstrom Gallery the night before its biggest auction. Devon Marsh, the gallery's late-shift security guard, is the only person whose badge opened the display case that night.",
+  "prosecutionStatement": "One badge opened that case at **2:14 in the morning**. It was not a curator's. It was not a cleaner's. It belonged to the man paid to guard it. Add $9,000 of debt and a watch worth two hundred times that, and the picture is **not complicated**.",
+  "defenseStatement": "Three other people held that override code. *Three.* And 6 minutes after the scan the State keeps waving at you, Devon Marsh filed the report that told everyone the case was open. _Think about that._ **Thieves do not report their own thefts.**",
+  "evidence": [
+    {
+      "id": "e1",
+      "title": "Badge access log",
+      "description": "Marsh's badge opened the display case at 2:14 a.m., forty minutes into his shift.",
+      "favors": "prosecution",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "e2",
+      "title": "Debt records",
+      "description": "Marsh owed a collections agency roughly $9,000 at the time of the theft.",
+      "favors": "prosecution",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "e3",
+      "title": "Override code list",
+      "description": "Three other staff members had the case's override code active that week.",
+      "favors": "defense",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "e4",
+      "title": "Marsh's incident report",
+      "description": "Marsh filed a report about the open case at 2:20 a.m. \u2014 six minutes after the badge scan, before the gallery even opened the next day.",
+      "favors": "defense",
+      "visibility": "private",
+      "insiderOnly": false
+    },
+    {
+      "id": "e5",
+      "title": "Curator's calendar",
+      "description": "The curator had scheduled unrelated after-hours case maintenance that same night but never logged it.",
+      "favors": "defense",
+      "visibility": "private",
+      "insiderOnly": false
+    },
+    {
+      "id": "e6",
+      "title": "Pawn shop tip",
+      "description": "A note passed to you before the trial: someone tried to sell a watch matching the description two towns over, three days after the theft \u2014 using a name that isn't Marsh's.",
+      "favors": "defense",
+      "visibility": "private",
+      "insiderOnly": true
+    }
+  ]
+}

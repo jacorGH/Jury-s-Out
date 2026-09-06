@@ -1,0 +1,68 @@
+{
+“caseId”: “case-impersonating-dr-001”,
+“title”: “The Unlicensed Clinic”,
+“basedOn”: “Fictional case”,
+“contentWarnings”: [“professional fraud”, “medical deception”],
+“tone”: “grounded”,
+“numDefendants”: 1,
+“defendants”: [
+{
+“id”: “def-001”,
+“name”: “Evan Mercer”,
+“trueOutcomeRev”: “ytliug”
+}
+],
+“summary”: “Evan Mercer is accused of presenting himself as a licensed physician while providing basic health consultations at a temporary community clinic. He used the professional name Dr. Evan Mercer on appointment materials and wore a white coat bearing a medical identification badge. The central dispute is whether Mercer deliberately represented himself as a doctor or whether the circumstances created a misleading impression that he did not intend to create.”,
+“prosecutionStatement”: “The prosecution argues that Mercer knowingly adopted the appearance and title of a physician despite having no medical license. Appointment records, promotional materials, and statements from clinic staff indicate that he allowed patients to believe he was a doctor. The prosecution contends that his conduct was deliberate rather than accidental and that he continued the presentation after having opportunities to correct the misunderstanding.”,
+“defenseStatement”: “The defense argues that Mercer never claimed to hold a medical license and was assisting with administrative health education under the supervision of licensed personnel. The defense points to his lack of formal medical credentials on the clinic paperwork and evidence that some staff members knew his actual role. They contend that the title used in informal materials was a mistake and that Mercer did not intend to deceive anyone.”,
+“evidence”: [
+{
+“id”: “ev-001”,
+“title”: “Clinic Appointment Card”,
+“description”: “A publicly distributed appointment card lists Evan Mercer under the professional name Dr. Evan Mercer and identifies him as providing patient consultations.”,
+“favors”: “prosecution”,
+“visibility”: “public”,
+“insiderOnly”: false
+},
+{
+“id”: “ev-002”,
+“title”: “Clinic Registration Form”,
+“description”: “A publicly available clinic registration form lists Mercer as a health education volunteer and leaves the field for medical license number blank.”,
+“favors”: “defense”,
+“visibility”: “public”,
+“insiderOnly”: false
+},
+{
+“id”: “ev-003”,
+“title”: “Staff Scheduling Sheet”,
+“description”: “An internal scheduling document assigns Mercer several blocks described as consultation hours and places him in the same schedule category as two licensed clinicians.”,
+“favors”: “prosecution”,
+“visibility”: “public”,
+“insiderOnly”: false
+},
+{
+“id”: “ev-004”,
+“title”: “Supervising Nurse Statement”,
+“description”: “A clinic nurse states that Mercer introduced himself as a health educator during staff orientation and that she understood his role to be limited to general information rather than medical diagnosis.”,
+“favors”: “defense”,
+“visibility”: “public”,
+“insiderOnly”: false
+},
+{
+“id”: “ev-005”,
+“title”: “Email to Clinic Organizer”,
+“description”: “A private email sent before the clinic opened discusses whether Mercer should be presented as a doctor and records the organizer asking him to clarify his credentials before meeting patients.”,
+“favors”: “neutral”,
+“visibility”: “private”,
+“insiderOnly”: false
+},
+{
+“id”: “ev-006”,
+“title”: “Badge Order Record”,
+“description”: “A private vendor record shows that Mercer personally approved an identification badge displaying the title Dr. before the clinic began operating.”,
+“favors”: “neutral”,
+“visibility”: “private”,
+“insiderOnly”: false
+}
+]
+}

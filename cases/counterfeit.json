@@ -1,1 +1,83 @@
-
+{
+"caseId": "CASE-2026-AR-412",
+"title": "State v. Sterling and Vance",
+"basedOn": "Loosely based on historical commercial warehouse arson investigations involving disputed insurance claims",
+"contentWarnings": [
+"Property Destruction"
+],
+"tone": "dramatized",
+"numDefendants": 2,
+"defendants": [
+{
+"id": "DEF-01",
+"name": "Arthur Sterling",
+"trueOutcome": "guilty"
+},
+{
+"id": "DEF-02",
+"name": "Eleanor Vance",
+"trueOutcome": "not_guilty"
+}
+],
+"summary": "Defendants Arthur Sterling and Eleanor Vance face charges of aggravated arson and conspiracy regarding a late-night fire that destroyed their jointly owned textile warehouse, resulting in a three million dollar insurance claim.",
+"prosecutionStatement": "The prosecution will prove that faced with mounting corporate debt, Defendant Sterling orchestrated the deliberate destruction of the warehouse using chemical accelerants, with the full knowledge and consent of Defendant Vance.",
+"defenseStatement": "The defense maintains that the fire originated from an unaddressed electrical malfunction near old machinery, and that neither business partner had any involvement in or prior knowledge of the blaze.",
+"evidence": [
+{
+"id": "EVID-01",
+"title": "Arson Investigation Chemical Analysis",
+"description": "Laboratory tests confirming the presence of industrial grade kerosene residue on floorboards near the central loading bay.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "EVID-02",
+"title": "Surveillance Camera Footage",
+"description": "Granular security video showing a dark sedan entering the industrial park forty minutes before smoke was detected.",
+"favors": "neutral",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "EVID-03",
+"title": "Building Maintenance Work Orders",
+"description": "Recent maintenance logs showing three documented complaints filed by Defendant Vance regarding sparking breaker panels in the rear facility.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "EVID-04",
+"title": "Adjusted Insurance Policy Documentation",
+"description": "Policy updates executed three weeks prior to the incident which doubled the payout sum for total property loss.",
+"favors": "prosecution",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "EVID-05",
+"title": "Alibi Phone Records",
+"description": "Cellular tower data placing Defendant Vance six miles away at a residential diner at the estimated time of ignition.",
+"favors": "defense",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "EVID-06",
+"title": "Facility Security System Log",
+"description": "Automated alarm reports indicating the rear exit door was unlocked manually using a master keypad code assigned exclusively to Defendant Sterling.",
+"favors": "prosecution",
+"visibility": "private",
+"insiderOnly": true
+},
+{
+"id": "EVID-07",
+"title": "Inventory Shipment Manifests",
+"description": "Shipping records demonstrating that high value raw materials were moved out of the building two days before the fire for scheduled processing.",
+"favors": "neutral",
+"visibility": "public",
+"insiderOnly": false
+}
+]
+}
