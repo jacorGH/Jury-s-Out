@@ -5,7 +5,8 @@
     "cases/the-unlicensed-clinic.json",
     "cases/counterfeit.json",
     "cases/the-great-alpaca-caper.json",
-    "cases/the-dealership-valet-heist.json"
+    "cases/the-dealership-valet-heist.json",
+    "cases/the_spiral_staircase.json"
   ],
   "names": ["names/example-names.json"],
   "phrases": ["phrases/example-phrases.json"]
