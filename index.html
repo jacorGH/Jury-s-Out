@@ -739,7 +739,11 @@
   <button class="btn btn-primary" id="btn-load-case">Load case</button>
   <button class="btn btn-secondary" id="btn-load-sample">Use sample case instead</button>
   <button class="btn btn-secondary" id="btn-copy-sealed" style="display:none;">Copy sealed case (to save as a pack)</button>
+
+  <div class="sec-head">Your content packs</div>
+  <p class="status" id="cs-pack-status">Checking content/ for packs…</p>
   <div id="cs-extra-cases" style="margin-bottom:4px;"></div>
+  <button class="btn btn-secondary btn-small" id="btn-reload-packs">Reload packs</button>
 
   <div class="spacer"></div>
   <button class="btn btn-secondary" id="btn-case-back">Back to lobby</button>
@@ -1629,63 +1633,186 @@ const CHAT_PHRASES = {
    see content/manifest.json for the format. No manifest present is the
    normal, expected default: the game just runs on its built-ins.
 */
-async function loadContentPacks() {
-  try {
-    const res = await fetch(CONTENT_BASE + 'manifest.json');
-    if (!res || !res.ok) return;
-    const manifest = await res.json();
+/* Resolves a manifest entry to a real URL. Forgiving on purpose: people write
+   "cases/x.json", "/cases/x.json" and "content/cases/x.json" interchangeably,
+   and the last one used to silently become content/content/cases/x.json. */
+function resolvePackPath(entry) {
+  let e = String(entry).trim().replace(/^\.?\//, '');
+  if (/^https?:\/\//i.test(e)) return e;
+  if (e.toLowerCase().startsWith(CONTENT_BASE.toLowerCase())) e = e.slice(CONTENT_BASE.length);
+  return CONTENT_BASE + e;
+}
 
-    if (Array.isArray(manifest.cases)) {
-      for (const path of manifest.cases) {
-        try {
-          const r = await fetch(CONTENT_BASE + path);
-          const parsedPack = parseCaseText(await r.text());
-          const data = parsedPack.data;
-          if (!data) { console.warn('[jury] unreadable case pack', path); continue; }
-          const entries = Array.isArray(data) ? data : [data];
-          entries.forEach(c => {
-            const { valid } = validateCaseJSON(c);
-            if (valid) EXTRA_CASES.push(normalizeCaseOutcomes(c));
-            else console.warn('[jury] skipped invalid case in', path);
-          });
-        } catch (e) { console.warn('[jury] could not load case pack', path); }
-      }
-    }
-    if (Array.isArray(manifest.names)) {
-      for (const path of manifest.names) {
-        try {
-          const r = await fetch(CONTENT_BASE + path);
-          const data = await r.json();
-          if (Array.isArray(data.firsts)) FIRST_NAMES.push(...data.firsts);
-          if (Array.isArray(data.lasts)) LAST_NAMES.push(...data.lasts);
-        } catch (e) { console.warn('[jury] could not load name pack', path); }
-      }
-    }
-    if (Array.isArray(manifest.phrases)) {
-      for (const path of manifest.phrases) {
-        try {
-          const r = await fetch(CONTENT_BASE + path);
-          const data = await r.json();
-          if (Array.isArray(data.general)) CHAT_PHRASES.general.push(...data.general);
-          if (data.roles) {
-            Object.keys(data.roles).forEach(roleId => {
-              if (CHAT_PHRASES.roles[roleId]) CHAT_PHRASES.roles[roleId].push(...data.roles[roleId]);
-            });
-          }
-          // Packs can also target a specific category (press, doubt, accuse…).
-          if (data.categories) {
-            Object.keys(data.categories).forEach(catId => {
-              if (CHAT_PHRASES.categories[catId]) CHAT_PHRASES.categories[catId].push(...data.categories[catId]);
-            });
-          }
-        } catch (e) { console.warn('[jury] could not load phrase pack', path); }
-      }
-    }
-    if (typeof renderExtraCasesList === 'function') renderExtraCasesList();
-    log(`Content packs loaded: ${EXTRA_CASES.length} extra case(s)`);
-  } catch (e) {
-    // No manifest.json — perfectly normal, the game runs on its built-ins.
+/* Accepts several manifest shapes rather than one exact one:
+     { "cases": [...], "names": [...], "phrases": [...] }   the documented form
+     { "cases": "cases/one.json" }                          a bare string
+     [ "cases/a.json", "names/b.json" ]                     a flat list
+   A flat list is sorted by folder name, falling back to cases. */
+function normalizeManifest(m) {
+  const out = { cases: [], names: [], phrases: [] };
+  const add = (bucket, v) => {
+    if (!v) return;
+    (Array.isArray(v) ? v : [v]).forEach(x => { if (x) out[bucket].push(x); });
+  };
+  if (Array.isArray(m)) {
+    m.forEach(entry => {
+      const e = String(entry).toLowerCase();
+      if (e.includes('/names/') || e.includes('name')) add('names', entry);
+      else if (e.includes('/phrases/') || e.includes('phrase')) add('phrases', entry);
+      else add('cases', entry);
+    });
+    return out;
   }
+  if (m && typeof m === 'object') {
+    add('cases', m.cases); add('names', m.names); add('phrases', m.phrases);
+  }
+  return out;
+}
+
+/* Loads optional content packs. Every outcome is recorded in state.packReport
+   and surfaced on the case setup screen — the previous version swallowed every
+   failure, so a typo'd path or an invalid case looked identical to having no
+   packs at all, with nothing anywhere to explain it. */
+let packsLoaded = false;
+
+async function loadContentPacks(force) {
+  if (packsLoaded && !force) return;
+  packsLoaded = true;
+
+  const report = { ok: [], problems: [], manifest: null };
+  state.packReport = report;
+
+  let res;
+  try {
+    res = await fetch(resolvePackPath('manifest.json'), { cache: 'no-store' });
+  } catch (e) {
+    report.manifest = 'unreachable';
+    report.problems.push('Could not fetch content/manifest.json (' + e.message + ')');
+    renderPackStatus();
+    return;
+  }
+  if (!res || !res.ok) {
+    // No manifest is the normal default, not an error.
+    report.manifest = res && res.status === 404 ? 'none' : 'error';
+    if (report.manifest === 'error') report.problems.push('content/manifest.json returned HTTP ' + res.status);
+    renderPackStatus();
+    return;
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(await res.text());
+  } catch (e) {
+    report.manifest = 'invalid';
+    report.problems.push('content/manifest.json is not valid JSON: ' + e.message);
+    renderPackStatus();
+    return;
+  }
+
+  const lists = normalizeManifest(manifest);
+  report.manifest = 'ok';
+  log(`Manifest lists ${lists.cases.length} case, ${lists.names.length} name, ${lists.phrases.length} phrase pack(s)`);
+
+  const fetchJson = async (entry, kind) => {
+    const url = resolvePackPath(entry);
+    let r;
+    try {
+      r = await fetch(url, { cache: 'no-store' });
+    } catch (e) {
+      report.problems.push(`${kind} "${entry}" — could not be fetched`);
+      return null;
+    }
+    if (!r.ok) {
+      report.problems.push(`${kind} "${entry}" — HTTP ${r.status} at ${url}`);
+      return null;
+    }
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      // Reuse the same repair ladder the paste box uses.
+      const repaired = parseCaseText(text);
+      if (repaired.data) return repaired.data;
+      report.problems.push(`${kind} "${entry}" — invalid JSON: ${e.message}`);
+      return null;
+    }
+  };
+
+  for (const entry of lists.cases) {
+    const data = await fetchJson(entry, 'Case pack');
+    if (!data) continue;
+    const items = Array.isArray(data) ? data : [data];
+    items.forEach(c => {
+      const { valid, errors } = validateCaseJSON(c);
+      if (valid) {
+        EXTRA_CASES.push(normalizeCaseOutcomes(c));
+        report.ok.push('Case: ' + c.title);
+      } else {
+        report.problems.push(`Case pack "${entry}" — ${errors[0]}`);
+      }
+    });
+  }
+
+  for (const entry of lists.names) {
+    const data = await fetchJson(entry, 'Name pack');
+    if (!data) continue;
+    let n = 0;
+    if (Array.isArray(data.firsts)) { FIRST_NAMES.push(...data.firsts); n += data.firsts.length; }
+    if (Array.isArray(data.lasts)) { LAST_NAMES.push(...data.lasts); n += data.lasts.length; }
+    if (n) report.ok.push(`${n} names`);
+    else report.problems.push(`Name pack "${entry}" — expected "firsts" and/or "lasts" arrays`);
+  }
+
+  for (const entry of lists.phrases) {
+    const data = await fetchJson(entry, 'Phrase pack');
+    if (!data) continue;
+    let n = 0;
+    if (Array.isArray(data.general)) { CHAT_PHRASES.general.push(...data.general); n += data.general.length; }
+    if (data.roles) {
+      Object.keys(data.roles).forEach(roleId => {
+        if (CHAT_PHRASES.roles[roleId]) { CHAT_PHRASES.roles[roleId].push(...data.roles[roleId]); n += data.roles[roleId].length; }
+        else report.problems.push(`Phrase pack "${entry}" — unknown role "${roleId}"`);
+      });
+    }
+    if (data.categories) {
+      Object.keys(data.categories).forEach(catId => {
+        if (CHAT_PHRASES.categories[catId]) { CHAT_PHRASES.categories[catId].push(...data.categories[catId]); n += data.categories[catId].length; }
+        else report.problems.push(`Phrase pack "${entry}" — unknown category "${catId}"`);
+      });
+    }
+    if (n) report.ok.push(`${n} phrases`);
+    else report.problems.push(`Phrase pack "${entry}" — expected "general", "roles" or "categories"`);
+  }
+
+  report.problems.forEach(p => log('Pack problem: ' + p));
+  log(`Content packs: ${EXTRA_CASES.length} extra case(s), ${report.problems.length} problem(s)`);
+  if (typeof renderExtraCasesList === 'function') renderExtraCasesList();
+  renderPackStatus();
+}
+
+// Says plainly what loaded and what didn't, on the screen where it matters.
+function renderPackStatus() {
+  const el = document.getElementById('cs-pack-status');
+  if (!el) return;
+  const r = state.packReport;
+  el.className = 'status';
+  if (!r) { el.textContent = 'Checking content/ for packs…'; return; }
+
+  if (r.manifest === 'none') {
+    el.textContent = 'No content/manifest.json found — using built-in cases only. Add one to load your own.';
+    return;
+  }
+  if (r.manifest !== 'ok') {
+    el.className = 'status error';
+    el.textContent = r.problems[0] || 'Could not read content/manifest.json.';
+    return;
+  }
+  const parts = [];
+  if (r.ok.length) parts.push('Loaded ' + r.ok.join(', ') + '.');
+  if (r.problems.length) parts.push(r.problems.length + ' problem(s): ' + r.problems[0]);
+  if (!r.ok.length && !r.problems.length) parts.push('Manifest found but it lists nothing.');
+  el.textContent = parts.join(' ');
+  if (r.problems.length) el.className = 'status error';
 }
 
 /* ============ SECTION: STATE ============ */
@@ -1725,6 +1852,7 @@ const state = {
   swayLog: [],            // meaningful conviction moves, for the post-game recap
   voteRound: 1,           // which ballot we're on
   chatEvidence: null,     // exhibit attached to the next message, if any
+  packReport: null,       // what content/ actually yielded, shown on the setup screen
   chatLog: []
 };
 let voteTimerInterval = null;
@@ -4757,7 +4885,16 @@ document.getElementById('btn-share').onclick = shareInvite;
 
 document.getElementById('btn-set-up-case').onclick = () => {
   renderExtraCasesList();
+  renderPackStatus();
   showScreen('screen-case-setup');
+};
+
+document.getElementById('btn-reload-packs').onclick = async () => {
+  EXTRA_CASES.length = 0;
+  document.getElementById('cs-pack-status').textContent = 'Reloading…';
+  await loadContentPacks(true);
+  renderExtraCasesList();
+  showToast('Packs reloaded.', 'info');
 };
 
 document.getElementById('btn-generate-prompt').onclick = () => {

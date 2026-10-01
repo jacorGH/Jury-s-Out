@@ -410,7 +410,9 @@ content/
   phrases/   my-phrases.json
 ```
 
-**`content/manifest.json`**
+**`content/manifest.json` — required.** Static hosting can't list a directory,
+so a file in `content/cases/` is invisible to the game until it's registered
+here. This is the usual reason a pack "doesn't load".
 
 ```json
 {
@@ -420,9 +422,25 @@ content/
 }
 ```
 
-Loaded cases appear as **Load: <title>** buttons on the case setup screen. Each
-is validated; invalid ones are skipped with a console warning rather than
-breaking the game. A case file may contain one object or an array of them.
+Paths are forgiving — `cases/x.json`, `/cases/x.json`, `./cases/x.json` and
+`content/cases/x.json` all resolve to the same file, and a full `https://` URL
+works too. A bare string instead of an array is fine, as is a flat list
+(`["cases/a.json", "names/b.json"]`), which is sorted by folder name.
+
+Loaded cases appear as **Load: <title>** buttons on the case setup screen, above
+a **Your content packs** status line that says exactly what loaded and what
+didn't:
+
+- `No content/manifest.json found — using built-in cases only.`
+- `Manifest found but it lists nothing.`
+- `Case pack "cases/typo.json" — HTTP 404 at content/cases/typo.json`
+- `Case pack "cases/bad.json" — Need at least one entry in "evidence".`
+- `Phrase pack "phrases/p.json" — unknown role "nosuchrole"`
+- `Loaded Case: Packed Case, 3 names, 1 phrases.`
+
+A **Reload packs** button re-fetches without a page refresh. Pack files go
+through the same JSON repair ladder as the paste box, so curly quotes from an
+AI won't break them. A case file may hold one object or an array of them.
 
 **`names/*.json`** — extends the random name generator.
 
@@ -606,6 +624,8 @@ Include a TCP/443 variant — it's what gets through restrictive firewalls.
 | Room dies when fetching case JSON | Old build | Fixed — the room revives on the same code |
 | "That's not valid JSON" | Curly quotes from ChatGPT | Auto-repaired now; check the log for which repair ran |
 | Can't tap Start trial | Under 4 jurors, or no case | Add AI jurors and load a case |
+| Content pack ignored | Not listed in `content/manifest.json` | Register it — folders aren't scanned |
+| Pack still ignored | Wrong path, bad JSON, or failed validation | Read the **Your content packs** line on the case setup screen |
 | No sound | Browser needs a tap first, or muted | Tap anything; check the ♪ toggle |
 | PeerJS didn't load | unpkg blocked | Vendor `peerjs.min.js` locally and update the `<script>` src |
 
