@@ -1,0 +1,88 @@
+{
+  "caseId": "LA-CF-047",
+  "title": "The Riverfront Printing Case",
+  "basedOn": "Loosely inspired by publicly documented U.S. federal counterfeiting cases involving home printing equipment, counterfeit currency, and digital evidence; all names, locations, dates, and identifying circumstances are fictionalized.",
+  "contentWarnings": [
+    "Counterfeiting",
+    "Financial crime",
+    "Federal criminal investigation"
+  ],
+  "tone": "grounded",
+  "numDefendants": 1,
+  "defendants": [
+    {
+      "id": "D1",
+      "name": "Evan Mercer",
+      "trueOutcomeEnc": "DQAbFVkL"
+    }
+  ],
+  "summary": "Evan Mercer, a small-business owner, is accused of producing and attempting to circulate counterfeit U.S. currency from a rented workspace. Investigators recovered printing equipment, specialized paper, and several counterfeit notes after receiving information that Mercer had offered unusually high-value bills to local businesses. The defense argues that Mercer possessed the equipment for legitimate commercial printing and that the government has not established that he personally produced or knowingly attempted to pass the counterfeit notes.",
+  "prosecutionStatement": "The defendant's own cabinet held **18 counterfeit $50 notes**. His own printer produced them. His own computer searched how. And then he walked into a store and handed one across the counter. Motive, means, opportunity \u2014 **all three, in one room**.",
+  "defenseStatement": "A password *four people* knew. A workspace two former employees still had keys to. A printer that ran legitimate jobs every week. The government cannot tell you **who** operated that machine \u2014 their own lab admits it. _Not one witness saw my client print anything._ **That is not proof. That is proximity.**",
+  "evidence": [
+    {
+      "id": "E1",
+      "title": "Recovered Counterfeit Notes",
+      "description": "Federal agents recovered 18 counterfeit $50 notes from a locked storage cabinet inside Mercer's rented workspace. The cabinet was assigned to Mercer under the workspace rental agreement.",
+      "favors": "prosecution",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "E2",
+      "title": "Printing Equipment",
+      "description": "Investigators documented a high-resolution printer, specialty paper, cutting equipment, and other supplies capable of producing documents resembling currency. The equipment was also used for legitimate commercial printing jobs.",
+      "favors": "neutral",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "E3",
+      "title": "Retail Surveillance",
+      "description": "Security footage from a convenience store shows Mercer purchasing several inexpensive items and handing the cashier a $50 note. The note was later identified as counterfeit, although the footage does not show where Mercer obtained it.",
+      "favors": "prosecution",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "E4",
+      "title": "Shared Workspace Access",
+      "description": "The building manager states that Mercer was not the only person with access to the workspace. Two former employees retained keys for several weeks after their employment ended, and access records do not identify which person entered the unit on several relevant dates.",
+      "favors": "defense",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "E5",
+      "title": "Computer Search History",
+      "description": "A forensic examination found searches concerning currency dimensions, security features, and high-quality document reproduction on a computer located in Mercer's office. The computer was protected by a common password known to several employees.",
+      "favors": "prosecution",
+      "visibility": "private",
+      "insiderOnly": false
+    },
+    {
+      "id": "E6",
+      "title": "Former Employee Statement",
+      "description": "A former employee told investigators that Mercer had previously discussed making novelty currency for a promotional event. The employee did not report seeing Mercer produce counterfeit money and acknowledged that the statement was based partly on a conversation from several months earlier.",
+      "favors": "defense",
+      "visibility": "private",
+      "insiderOnly": false
+    },
+    {
+      "id": "E7",
+      "title": "Forensic Printer Analysis",
+      "description": "A government laboratory concluded that several recovered counterfeit notes were produced using equipment consistent with the printer seized from Mercer's workspace. The analysis could not determine which individual operated the printer when the notes were made.",
+      "favors": "neutral",
+      "visibility": "public",
+      "insiderOnly": false
+    },
+    {
+      "id": "E8",
+      "title": "Unreported Admission",
+      "description": "A confidential investigator report states that Mercer privately acknowledged having handled counterfeit notes before the search. The report contains no recording, and the investigator's account is the only direct evidence of the alleged admission.",
+      "favors": "prosecution",
+      "visibility": "private",
+      "insiderOnly": true
+    }
+  ]
+}

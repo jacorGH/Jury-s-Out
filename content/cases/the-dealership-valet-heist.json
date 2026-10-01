@@ -1,0 +1,87 @@
+{
+"caseId": "gta-2026-0892",
+"title": "State v. Vance",
+"basedOn": "Loosely based on the 2011 Dallas luxury dealership valet heist",
+"contentWarnings": [
+"Grand theft auto",
+"Vehicular flight"
+],
+"tone": "dramatized",
+"numDefendants": 1,
+"defendants": [
+{
+"id": "def-1",
+"name": "Julian Vance",
+"trueOutcomeRev": "ytliug_ton"
+}
+],
+"summary": "At approximately two in the morning, a rare Italian sports car valued at over two hundred thousand dollars was removed from the private garage of a high-end valet facility. The state alleges the defendant used duplicate access keys to enter the premises and drive the vehicle off the lot. The defense maintains the defendant was misidentified due to grainy surveillance footage and an identical uniform.",
+"prosecutionStatement": "Members of the jury, this was not a simple mistake or a missing key. The defendant walked into a high-security lot, climbed into a quarter-million-dollar vehicle, and drove it into the night. He knew the security codes, he knew the patrol schedules, and he thought no one was watching. The physical evidence shows he was the last person with direct access to that key safe. He exploited his position of trust to commit an audacious act of grand theft.",
+"defenseStatement": "The prosecution wants you to look at a shadowy figure on a low-resolution screen and jump to conclusions. Julian Vance was off the clock, miles away, and working an extra shift at a diner when this vehicle was taken. The lot security was notoriously lax, practically inviting an intruder, and the state failed to test the door handle for conflicting latent fingerprints. My client is a scapegoat for systemic security failure, not a car thief.",
+"evidence": [
+{
+"id": "ev-1",
+"title": "High-Definition Garage Entrance Video",
+"description": "Surveillance footage showing an individual matching the physical build and uniform of the defendant entering the keypad-secured door at 02:14 AM.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-2",
+"title": "Diner Timecard Log",
+"description": "A stamped timecard from an all-night diner three miles away, showing an employee badge scan under the defendant name at 02:05 AM.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-3",
+"title": "Valet Key Safe Electronic Audit",
+"description": "Digital log indicating the master key box was opened using the defendant unique personal identification number four minutes before the vehicle departed.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-4",
+"title": "Unidentified DNA Profile on Steering Lock",
+"description": "Swab analysis from the recovered vehicle steering wheel yielded a full DNA profile that does not match the defendant or the registered owner.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-5",
+"title": "Traffic Camera License Plate Reader",
+"description": "Automated license plate capture logging the stolen sports car heading southbound on Highway 9 at 02:22 AM.",
+"favors": "neutral",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-6",
+"title": "Anonymized Financial Transfer Record",
+"description": "Bank statement indicating an offshore wire transfer of fifteen thousand dollars into an account linked to the defendant two days prior to the incident.",
+"favors": "prosecution",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "ev-7",
+"title": "Facility Manager Security Memo",
+"description": "Internal email from the facility manager noting that several valet uniform shirts and default master keypad codes were left unmanaged following recent staff turnover.",
+"favors": "defense",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "ev-8",
+"title": "Confidential Informant Deposition",
+"description": "Statement from an undercover operative asserting that an organized auto ring frequently cloned valet keycards across the downtown district.",
+"favors": "neutral",
+"visibility": "private",
+"insiderOnly": true
+}
+]
+}

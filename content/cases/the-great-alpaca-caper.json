@@ -1,0 +1,68 @@
+{
+"caseId": "gt-2026-0891",
+"title": "The Great Alpaca Caper",
+"basedOn": "Loosely inspired by the 2011 theft of a valuable prize-winning alpaca from a suburban farm",
+"contentWarnings": ["Pet theft", "Satirical farm crime"],
+"tone": "satirical",
+"numDefendants": 1,
+"defendants": [
+{
+"id": "def-1",
+"name": "Barnaby Finch",
+"trueOutcomeRev": "ytliug_ton"
+}
+],
+"summary": "A high-society champion alpaca named Sir Fluffington went missing from a secure barn during a luxury livestock gala. The defendant, a rival breeder known for intense competition, was apprehended near the property with a trailer containing loose fleece.",
+"prosecutionStatement": "Ladies and gentlemen of the jury, this was not a simple misunderstanding. Barnaby Finch committed premeditated grand theft to sabotage his chief rival. He planned this heist, drove his trailer to the barn under cover of darkness, and brazenly stole a prized animal valued at over fifty thousand dollars. We will prove he had the motive, the means, and the fleece in his possession. He thought he could fleece us all. Return the only sensible verdict: convict the defendant.",
+"defenseStatement": "Members of the jury, the prosecution presents a fairy tale. My client is a respected breeder who was merely assisting with event logistics that evening. The fleece in his trailer was bought legally hours earlier, and no eyewitness saw him touch the animal. He was framed by an elaborate prank organized by desperate competitors. Barnaby Finch is an innocent man caught in a chaotic Web of farmyard politics. Clear his name today.",
+"evidence": [
+{
+"id": "ev-1",
+"title": "Trailer Search Log",
+"description": "Police recovered raw alpaca fleece inside the defendant trailer matching the breed of the stolen animal.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-2",
+"title": "Receipt for Fiber Sale",
+"description": "A time-stamped receipt showing the defendant purchased genuine alpaca fiber from a local vendor two hours prior to the incident.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-3",
+"title": "Gala Security Footage",
+"description": "Video showing a shadowed figure wearing a oversized trench coat exiting the barn gate around midnight.",
+"favors": "neutral",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "ev-4",
+"title": "Text Message Thread",
+"description": "Messages from the defendant to his assistant stating that the prize animal would be his by morning.",
+"favors": "prosecution",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "ev-5",
+"title": "Anonymous Tip Log",
+"description": "An unsigned call to dispatch claiming another rival breeder planted evidence near the defendant vehicle.",
+"favors": "defense",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "ev-6",
+"title": "Gala Guest Registry",
+"description": "A sign-in sheet proving over two hundred individuals had open access to the barn area during the party.",
+"favors": "neutral",
+"visibility": "public",
+"insiderOnly": true
+}
+]
+}
