@@ -1,13 +1,30 @@
 {
-  "cases": [
-    "cases/example-heist.json",
-    "cases/riverfront-printing.json",
-    "cases/the-unlicensed-clinic.json",
-    "cases/counterfeit.json",
-    "cases/the-great-alpaca-caper.json",
-    "cases/the-dealership-valet-heist.json",
-    "cases/the_spiral_staircase.json"
-  ],
-  "names": ["names/example-names.json"],
-  "phrases": ["phrases/example-phrases.json"]
+  "name": "Jury's Out",
+  "short_name": "Jury's Out",
+  "description": "A peer-to-peer jury deliberation party game. Everyone in the room has their own reason to vote the way they do.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1A1D24",
+  "theme_color": "#1A1D24",
+  "icons": [
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
 }

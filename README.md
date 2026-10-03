@@ -74,7 +74,15 @@ instead** → **Start trial**. Three AI jurors are added automatically.
 1. Enter a name (or tap **Shuffle name**). It's remembered on your device.
 2. **Start a trial.** You get a 4-character room code.
 3. **Share invite link** — the native share sheet on mobile, clipboard on
-   desktop. The link pre-fills the code so guests just type a name and tap Join.
+   desktop. Tapping it **joins automatically** after a 3-second countdown, with
+   a **Change name** button to stop it.
+
+   The code travels in both the query string *and* the hash
+   (`?room=HJK7#room=HJK7`). If a guest has the game installed to their home
+   screen, tapping a link can open the installed app at its start URL and drop
+   the query — the hash survives that. The share text also leads with the code
+   in plain text, so a mangled link still leaves four characters to type, and
+   pasting the whole link (or the whole message) into the code box works.
 4. **Set up case** — load a case before or after people join (see
    [Making cases](#making-cases)).
 5. **Add AI juror** for any empty seats.
@@ -624,6 +632,7 @@ Include a TCP/443 variant — it's what gets through restrictive firewalls.
 | Room dies when fetching case JSON | Old build | Fixed — the room revives on the same code |
 | "That's not valid JSON" | Curly quotes from ChatGPT | Auto-repaired now; check the log for which repair ran |
 | Can't tap Start trial | Under 4 jurors, or no case | Add AI jurors and load a case |
+| Invite link doesn't fill the code | Guest has the app installed; start URL dropped the query | Fixed — the code is in the hash too. Re-share after updating |
 | Content pack ignored | Not listed in `content/manifest.json` | Register it — folders aren't scanned |
 | Pack still ignored | Wrong path, bad JSON, or failed validation | Read the **Your content packs** line on the case setup screen |
 | No sound | Browser needs a tap first, or muted | Tap anything; check the ♪ toggle |

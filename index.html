@@ -417,6 +417,15 @@
   .chat-msg.sarcasm .chat-msg-text{ border-left:3px solid #C9A0C0; font-style:italic; }
   .chat-msg.sarcasm{ animation:wobble .5s ease-in-out; }
 
+  .auto-join{
+    border:1px solid var(--brass); border-left:3px solid var(--brass);
+    background:rgba(184,147,74,.12); border-radius:6px;
+    padding:12px 14px; margin-bottom:16px;
+  }
+  .auto-join .aj-text{ font-size:14px; margin-bottom:10px; }
+  .auto-join .aj-actions{ display:flex; gap:8px; align-items:center; }
+  .auto-join .btn-send{ height:38px; font-size:13px; }
+
   details.settings{ margin-top:20px; }
   details.settings summary{ color:var(--text-dim); font-size:13px; cursor:pointer; }
 
@@ -635,6 +644,14 @@
       <input type="text" id="input-code" class="code-input" maxlength="9" placeholder="XXXX">
     </div>
     <button class="btn btn-primary" id="btn-join">Join</button>
+  </div>
+
+  <div class="auto-join" id="auto-join" style="display:none;">
+    <div class="aj-text" id="auto-join-text"></div>
+    <div class="aj-actions">
+      <button type="button" class="btn-send" id="btn-auto-join-now">Join now</button>
+      <button type="button" class="mini-select" id="btn-auto-join-cancel">Change name</button>
+    </div>
   </div>
 
   <p class="status" id="landing-status"></p>
@@ -2195,7 +2212,12 @@ function setupCopyCode(code) {
 }
 
 function inviteLink() {
-  return `${location.origin}${location.pathname}?room=${state.roomCode}`;
+  // The code goes in BOTH the query and the hash on purpose. If the recipient
+  // has the game installed to their home screen, tapping a link can open the
+  // installed app at its start_url and drop the query string — the hash
+  // survives that, and several messaging apps rewrite query params too.
+  const base = `${location.origin}${location.pathname}`;
+  return `${base}?room=${state.roomCode}#room=${state.roomCode}`;
 }
 
 async function shareInvite() {
@@ -2203,7 +2225,13 @@ async function shareInvite() {
   const link = inviteLink();
   if (navigator.share) {
     try {
-      await navigator.share({ title: "Join my trial — Jury's Out", text: `Join my jury. Room code: ${state.roomCode}`, url: link });
+      await navigator.share({
+        title: "Jury's Out",
+        // Lead with the code: if a messaging app strips or rewrites the link,
+        // the recipient can still type four characters.
+        text: `You've been summoned for jury duty. Room code ${state.roomCode}:`,
+        url: link
+      });
     } catch (err) {
       if (err.name !== 'AbortError') showError("Couldn't open the share sheet — try again.");
     }
@@ -4843,7 +4871,7 @@ document.getElementById('btn-shuffle-name').onclick = () => {
   document.getElementById('input-name').value = generateRandomName();
 };
 
-document.getElementById('btn-host').onclick = hostGame;
+document.getElementById('btn-host').onclick = () => { cancelAutoJoin(); hostGame(); };
 
 document.getElementById('btn-solo').onclick = () => {
   state.pendingAutoFill = MIN_PLAYERS;
@@ -4854,8 +4882,28 @@ document.getElementById('btn-show-join').onclick = () => {
   document.getElementById('join-fields').style.display = 'block';
 };
 
-document.getElementById('btn-join').onclick = () => {
+const codeField = document.getElementById('input-code');
+codeField.addEventListener('input', () => {
+  // Someone pasting the whole invite link should still end up with a code.
+  const cleaned = extractRoomCode(codeField.value);
+  if (cleaned && cleaned !== codeField.value.toUpperCase()) codeField.value = cleaned;
+});
+
+document.getElementById('btn-auto-join-now').onclick = () => {
   const code = document.getElementById('input-code').value.trim();
+  cancelAutoJoin();
+  if (code) joinGame(code);
+};
+
+document.getElementById('btn-auto-join-cancel').onclick = () => {
+  cancelAutoJoin('Enter your name, then tap Join.');
+  document.getElementById('input-name').focus();
+  document.getElementById('input-name').select();
+};
+
+document.getElementById('btn-join').onclick = () => {
+  cancelAutoJoin();
+  const code = extractRoomCode(document.getElementById('input-code').value.trim());
   if (!code) {
     document.getElementById('landing-status').textContent = 'Enter a room code first.';
     document.getElementById('landing-status').classList.add('error');
@@ -5062,15 +5110,70 @@ document.getElementById('btn-chat-close').onclick = () => {
 
 
 /* ============ SECTION: INIT ============ */
+/* Pulls a room code out of whatever got pasted or linked: a bare code, a full
+   invite URL, or a whole text message with the link buried in it. */
+function extractRoomCode(raw) {
+  if (!raw) return '';
+  const text = String(raw);
+  const m = text.match(/[?&#]room=([A-Za-z0-9]{3,9})/);
+  if (m) return m[1].toUpperCase();
+  return text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+
+let autoJoinTimer = null;
+
+function cancelAutoJoin(message) {
+  clearInterval(autoJoinTimer);
+  autoJoinTimer = null;
+  document.getElementById('auto-join').style.display = 'none';
+  if (message) document.getElementById('landing-status').textContent = message;
+}
+
+/* Someone tapped an invite. Fill the code in, and — since they already chose to
+   open the link — start joining on a short countdown instead of making them
+   fill in a form. The countdown is there so they can change the name first. */
 function applyIncomingRoomCode(raw) {
-  const code = raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  const code = extractRoomCode(raw);
   if (!code) return;
+
   document.getElementById('join-fields').style.display = 'block';
   document.getElementById('btn-show-join').style.display = 'none';
   document.getElementById('btn-host').className = 'btn btn-secondary';
   document.getElementById('input-code').value = code;
-  document.getElementById('landing-status').textContent = `Joining room ${code} — enter your name and tap Join.`;
-  document.getElementById('input-name').focus();
+  document.getElementById('landing-status').textContent = '';
+  document.getElementById('landing-status').classList.remove('error');
+
+  const nameField = document.getElementById('input-name');
+  if (!nameField.value.trim()) nameField.value = getInitialName();
+
+  const banner = document.getElementById('auto-join');
+  banner.style.display = 'block';
+  let left = 3;
+  const paint = () => {
+    document.getElementById('auto-join-text').textContent =
+      `Joining room ${code} as ${nameField.value.trim() || 'a juror'}… ${left}`;
+  };
+  paint();
+
+  clearInterval(autoJoinTimer);
+  autoJoinTimer = setInterval(() => {
+    left--;
+    if (left <= 0) {
+      cancelAutoJoin();
+      joinGame(code);
+      return;
+    }
+    paint();
+  }, 1000);
+}
+
+// Reads the code from the query string or the hash, whichever survived.
+function roomCodeFromURL() {
+  const q = new URLSearchParams(location.search).get('room');
+  if (q) return q;
+  // Guarded: this runs during startup, so a throw here would break boot.
+  const h = (location.hash || '').match(/room=([A-Za-z0-9]{3,9})/);
+  return h ? h[1] : '';
 }
 
 document.getElementById('btn-sound').onclick = () => {
@@ -5090,9 +5193,17 @@ document.getElementById('cfg-peer').value = savedPeerSpec();
 document.getElementById('input-name').value = getInitialName();
 
 (function initFromURL() {
-  const room = new URLSearchParams(location.search).get('room');
+  const room = roomCodeFromURL();
   if (room) applyIncomingRoomCode(room);
 })();
+
+// If the app is already open and a second invite arrives, pick it up.
+window.addEventListener('hashchange', () => {
+  const room = roomCodeFromURL();
+  if (room && document.getElementById('screen-landing').classList.contains('active')) {
+    applyIncomingRoomCode(room);
+  }
+});
 
 document.getElementById('seal-path').setAttribute('d', buildSealPath());
 document.querySelectorAll('.chip-seal-path').forEach(el => el.setAttribute('d', buildSealPath()));
