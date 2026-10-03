@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GitMobile - GitHub Client</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Base styles for app-like feel */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f3f4f6;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        
+        /* Smooth transitions for view changes */
+        .view {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .view.active {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Custom scrollbar for text editor */
+        textarea {
+            resize: none;
+        }
+        
+        /* Mobile container constraints */
+        .app-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Spinner animation */
+        .loader {
+            border-top-color: #3b82f6;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <div class="app-container flex flex-col h-screen">
+        
+        <!-- Header -->
+        <header class="bg-gray-900 text-white p-4 shadow-md flex items-center justify-between sticky top-0 z-10 shrink-0">
+            <div class="flex items-center gap-3">
+                <button id="back-btn" class="hidden w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 active:bg-gray-600 transition-colors">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h1 id="header-title" class="text-lg font-semibold truncate max-w-[200px] sm:max-w-[300px]">GitMobile</h1>
+            </div>
+            <div id="header-actions" class="flex gap-2">
+                <button id="logout-btn" class="hidden text-sm text-gray-300 hover:text-white px-2 py-1 rounded">Logout</button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto relative bg-gray-50 pb-20">
+            
+            <!-- Login View -->
+            <div id="view-login" class="view active h-full justify-center p-6 bg-white">
+                <div class="text-center mb-8">
+                    <i class="fab fa-github text-6xl text-gray-900 mb-4"></i>
+                    <h2 class="text-2xl font-bold">Connect to GitHub</h2>
+                    <p class="text-sm text-gray-500 mt-2">Enter your Personal Access Token (PAT) with 'repo' scope to continue.</p>
+                </div>
+                <div class="space-y-4">
+                    <input type="password" id="pat-input" placeholder="ghp_xxxxxxxxxxxx" class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-lg">
+                    <button id="login-submit" class="w-full bg-gray-900 text-white font-semibold py-4 rounded-xl hover:bg-gray-800 active:bg-gray-700 transition-colors text-lg shadow-md">
+                        Connect
+                    </button>
+                    <div class="text-xs text-gray-400 text-center mt-4">
+                        Tokens are only stored locally in your browser session.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Repositories View -->
+            <div id="view-repos" class="view min-h-full bg-white">
+                <div class="p-4 bg-gray-100 border-b border-gray-200 sticky top-0 z-0">
+                    <input type="text" id="repo-search" placeholder="Search repositories..." class="w-full p-3 pl-10 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                    <i class="fas fa-search absolute left-7 top-7 text-gray-400"></i>
+                </div>
+                <ul id="repo-list" class="divide-y divide-gray-200">
+                    <!-- Repo items will be injected here -->
+                </ul>
+                <div id="repo-loading" class="hidden py-10 flex flex-col items-center justify-center text-gray-500">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mb-4"></div>
+                    <p>Loading repositories...</p>
+                </div>
+            </div>
+
+            <!-- File Browser View -->
+            <div id="view-files" class="view min-h-full bg-white">
+                <div id="path-breadcrumb" class="p-3 bg-gray-100 border-b border-gray-200 text-sm font-mono text-gray-600 overflow-x-auto whitespace-nowrap sticky top-0 z-0">
+                    /
+                </div>
+                <ul id="file-list" class="divide-y divide-gray-200">
+                    <!-- File items will be injected here -->
+                </ul>
+                <div id="file-loading" class="hidden py-10 flex flex-col items-center justify-center text-gray-500">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-10 w-10 mb-4"></div>
+                    <p>Loading files...</p>
+                </div>
+            </div>
+
+            <!-- Editor View -->
+            <div id="view-editor" class="view h-full flex flex-col bg-white">
+                <div class="flex-1 flex flex-col p-4 gap-4 h-full">
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="edit-filename" class="flex-1 p-3 border border-gray-300 rounded-lg font-mono text-sm outline-none focus:border-blue-500" placeholder="filename.txt">
+                    </div>
+                    <textarea id="file-content" class="flex-1 p-3 border border-gray-300 rounded-lg font-mono text-sm outline-none focus:border-blue-500 w-full" placeholder="File content..."></textarea>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm mt-auto">
+                        <h3 class="text-sm font-semibold mb-2">Commit Changes</h3>
+                        <input type="text" id="commit-message" class="w-full p-3 border border-gray-300 rounded-lg outline-none focus:border-blue-500 text-sm mb-3" placeholder="Update file">
+                        <button id="commit-btn" class="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors shadow flex items-center justify-center gap-2">
+                            <i class="fas fa-check-circle"></i> Commit to Repository
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Custom Toast Notification -->
+    <div id="toast" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-lg transition-all duration-300 opacity-0 pointer-events-none z-50 flex items-center gap-3">
+        <i id="toast-icon" class="fas fa-info-circle"></i>
+        <span id="toast-message">Message</span>
+    </div>
+
+    <!-- Javascript Logic -->
+    <script>
+        // State Management
+        const state = {
+            token: localStorage.getItem('github_pat') || '',
+            user: null,
+            repos: [],
+            currentRepo: null, // { owner, name, default_branch }
+            currentPath: '',   // e.g., 'src/components'
+            pathHistory: [],   // Stack of paths for back navigation
+            currentFile: null, // { name, path, sha, content, originalName }
+            viewStack: ['login'] // ['login', 'repos', 'files', 'editor']
+        };
+
+        // DOM Elements
+        const DOM = {
+            views: {
+                login: document.getElementById('view-login'),
+                repos: document.getElementById('view-repos'),
+                files: document.getElementById('view-files'),
+                editor: document.getElementById('view-editor'),
+            },
+            headerTitle: document.getElementById('header-title'),
+            backBtn: document.getElementById('back-btn'),
+            logoutBtn: document.getElementById('logout-btn'),
+            toast: document.getElementById('toast'),
+            toastMsg: document.getElementById('toast-message'),
+            toastIcon: document.getElementById('toast-icon')
+        };
+
+        // Utility: Unicode-safe Base64 encoding/decoding
+        function utf8_to_b64(str) {
+            return window.btoa(unescape(encodeURIComponent(str)));
+        }
+        function b64_to_utf8(str) {
+            try {
+                return decodeURIComponent(escape(window.atob(str)));
+            } catch(e) {
+                return window.atob(str); // Fallback for purely binary files
+            }
+        }
+
+        // Utility: Custom Toast (Replaces alert)
+        let toastTimeout;
+        function showToast(message, type = 'info') {
+            DOM.toastMsg.textContent = message;
+            DOM.toast.classList.remove('opacity-0', 'translate-y-4');
+            
+            DOM.toastIcon.className = '';
+            if(type === 'error') {
+                DOM.toastIcon.classList.add('fas', 'fa-exclamation-circle', 'text-red-400');
+            } else if (type === 'success') {
+                DOM.toastIcon.classList.add('fas', 'fa-check-circle', 'text-green-400');
+            } else {
+                DOM.toastIcon.classList.add('fas', 'fa-info-circle', 'text-blue-400');
+            }
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                DOM.toast.classList.add('opacity-0', 'translate-y-4');
+            }, 3000);
+        }
+
+        // API Helpers
+        const API_BASE = 'https://api.github.com';
+        
+        async function fetchAPI(endpoint, options = {}) {
+            if (!state.token) throw new Error("Not authenticated");
+            
+            const headers = {
+                'Authorization': `token ${state.token}`,
+                'Accept': 'application/vnd.github.v3+json',
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+
+            const response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+            
+            if (!response.ok) {
+                let errMsg = `Error ${response.status}`;
+                try {
+                    const errData = await response.json();
+                    errMsg = errData.message || errMsg;
+                } catch(e) {}
+                throw new Error(errMsg);
+            }
+            
+            // Check for 204 No Content
+            if(response.status === 204) return null;
+            return await response.json();
+        }
+
+        // Core Functions
+        async function authenticate(token) {
+            try {
+                state.token = token;
+                const user = await fetchAPI('/user');
+                state.user = user;
+                localStorage.setItem('github_pat', token);
+                return true;
+            } catch (error) {
+                state.token = '';
+                localStorage.removeItem('github_pat');
+                showToast("Authentication failed: " + error.message, 'error');
+                return false;
+            }
+        }
+
+        async function loadRepositories() {
+            document.getElementById('repo-loading').classList.remove('hidden');
+            document.getElementById('repo-list').innerHTML = '';
+            try {
+                // Fetch user repos and sort by recently updated
+                const repos = await fetchAPI('/user/repos?sort=updated&per_page=100');
+                state.repos = repos;
+                renderRepositories(repos);
+            } catch (error) {
+                showToast("Failed to load repositories: " + error.message, 'error');
+            } finally {
+                document.getElementById('repo-loading').classList.add('hidden');
+            }
+        }
+
+        function renderRepositories(repos) {
+            const list = document.getElementById('repo-list');
+            list.innerHTML = '';
+            
+            if(repos.length === 0) {
+                list.innerHTML = '<li class="p-6 text-center text-gray-500">No repositories found.</li>';
+                return;
+            }
+
+            repos.forEach(repo => {
+                const li = document.createElement('li');
+                li.className = 'p-4 hover:bg-gray-50 active:bg-gray-100 cursor-pointer flex items-center gap-4 transition-colors';
+                li.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-gray-900 text-white flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-gray-900 font-semibold truncate">${repo.full_name}</h3>
+                        <p class="text-sm text-gray-500 truncate">${repo.private ? '<i class="fas fa-lock text-xs mr-1"></i>Private' : '<i class="fas fa-globe text-xs mr-1"></i>Public'} &middot; Updated ${new Date(repo.updated_at).toLocaleDateString()}</p>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                `;
+                li.onclick = () => openRepository(repo);
+                list.appendChild(li);
+            });
+        }
+
+        async function openRepository(repo) {
+            state.currentRepo = repo;
+            state.currentPath = '';
+            state.pathHistory = [];
+            navigate('files', repo.name);
+            await loadFiles('');
+        }
+
+        async function loadFiles(path) {
+            state.currentPath = path;
+            
+            // Update Breadcrumb
+            document.getElementById('path-breadcrumb').textContent = `${state.currentRepo.name} / ${path}`;
+            
+            document.getElementById('file-loading').classList.remove('hidden');
+            document.getElementById('file-list').innerHTML = '';
+            
+            try {
+                let endpoint = `/repos/${state.currentRepo.full_name}/contents`;
+                if (path) endpoint += `/${path}`;
+                
+                let contents = await fetchAPI(endpoint);
+                if (!Array.isArray(contents)) contents = [contents]; // Sometimes API returns single object
+                
+                // Sort: Directories first, then files alphabetically
+                contents.sort((a, b) => {
+                    if (a.type === 'dir' && b.type !== 'dir') return -1;
+                    if (a.type !== 'dir' && b.type === 'dir') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                renderFiles(contents);
+            } catch (error) {
+                showToast("Failed to load files: " + error.message, 'error');
+            } finally {
+                document.getElementById('file-loading').classList.add('hidden');
+            }
+        }
+
+        function renderFiles(files) {
+            const list = document.getElementById('file-list');
+            list.innerHTML = '';
+            
+            if(files.length === 0) {
+                list.innerHTML = '<li class="p-6 text-center text-gray-500">Empty directory.</li>';
+                return;
+            }
+
+            files.forEach(item => {
+                const isDir = item.type === 'dir';
+                const li = document.createElement('li');
+                li.className = 'p-4 hover:bg-gray-50 active:bg-gray-100 cursor-pointer flex items-center gap-3 transition-colors';
+                
+                const iconClass = isDir ? 'fa-folder text-blue-500 text-xl' : 'fa-file-alt text-gray-500 text-xl';
+                
+                li.innerHTML = `
+                    <div class="w-8 flex items-center justify-center flex-shrink-0">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <div class="flex-1 min-w-0 font-mono text-sm truncate">
+                        ${item.name}
+                    </div>
+                    ${isDir ? '<i class="fas fa-chevron-right text-gray-400 text-sm"></i>' : ''}
+                `;
+                
+                li.onclick = () => {
+                    if (isDir) {
+                        state.pathHistory.push(state.currentPath);
+                        loadFiles(item.path);
+                    } else {
+                        openFile(item);
+                    }
+                };
+                list.appendChild(li);
+            });
+        }
+
+        async function openFile(fileMeta) {
+            try {
+                // Fetch full file details including content
+                const fileData = await fetchAPI(`/repos/${state.currentRepo.full_name}/contents/${fileMeta.path}`);
+                
+                let content = '';
+                if(fileData.content) {
+                    content = b64_to_utf8(fileData.content);
+                }
+
+                state.currentFile = {
+                    name: fileData.name,
+                    originalName: fileData.name,
+                    path: fileData.path,
+                    sha: fileData.sha,
+                    content: content
+                };
+
+                document.getElementById('edit-filename').value = state.currentFile.name;
+                document.getElementById('file-content').value = state.currentFile.content;
+                document.getElementById('commit-message').value = `Update ${state.currentFile.name}`;
+                
+                navigate('editor', fileData.name);
+            } catch (error) {
+                showToast("Cannot open file (might be binary or too large): " + error.message, 'error');
+            }
+        }
+
+        async function commitChanges() {
+            const btn = document.getElementById('commit-btn');
+            const originalText = btn.innerHTML;
+            
+            const newName = document.getElementById('edit-filename').value.trim();
+            const newContent = document.getElementById('file-content').value;
+            const message = document.getElementById('commit-message').value.trim() || 'Update file via GitMobile';
+            
+            if(!newName) {
+                showToast("Filename cannot be empty", 'error');
+                return;
+            }
+
+            try {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Committing...';
+                btn.disabled = true;
+
+                const encodedContent = utf8_to_b64(newContent);
+                const basePath = state.currentPath ? state.currentPath + '/' : '';
+                const newPath = basePath + newName;
+                const isRenaming = state.currentFile.name !== newName;
+
+                if (isRenaming) {
+                    // GitHub REST API requires deleting the old file and creating a new one for renaming
+                    
+                    // 1. Create new file
+                    await fetchAPI(`/repos/${state.currentRepo.full_name}/contents/${newPath}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            message: `Rename ${state.currentFile.name} to ${newName}`,
+                            content: encodedContent
+                        })
+                    });
+
+                    // 2. Delete old file
+                    await fetchAPI(`/repos/${state.currentRepo.full_name}/contents/${state.currentFile.path}`, {
+                        method: 'DELETE',
+                        body: JSON.stringify({
+                            message: `Delete old ${state.currentFile.name} (renamed)`,
+                            sha: state.currentFile.sha
+                        })
+                    });
+                    
+                    showToast('File renamed and committed successfully!', 'success');
+                } else {
+                    // Standard update
+                    await fetchAPI(`/repos/${state.currentRepo.full_name}/contents/${state.currentFile.path}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            message: message,
+                            content: encodedContent,
+                            sha: state.currentFile.sha
+                        })
+                    });
+                    showToast('Changes committed successfully!', 'success');
+                }
+
+                // Go back to file list and refresh
+                goBack();
+                loadFiles(state.currentPath);
+
+            } catch (error) {
+                showToast("Commit failed: " + error.message, 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Navigation Control
+        function navigate(viewName, title = 'GitMobile') {
+            // Hide all views
+            Object.values(DOM.views).forEach(v => v.classList.remove('active'));
+            
+            // Show target
+            DOM.views[viewName].classList.add('active');
+            
+            // Update Header
+            DOM.headerTitle.textContent = title;
+            
+            // Update State Stack
+            if (state.viewStack[state.viewStack.length - 1] !== viewName) {
+                state.viewStack.push(viewName);
+            }
+
+            // Toggle Back Button & Logout
+            if (viewName === 'login') {
+                DOM.backBtn.classList.add('hidden');
+                DOM.logoutBtn.classList.add('hidden');
+            } else if (viewName === 'repos') {
+                DOM.backBtn.classList.add('hidden');
+                DOM.logoutBtn.classList.remove('hidden');
+            } else {
+                DOM.backBtn.classList.remove('hidden');
+                DOM.logoutBtn.classList.add('hidden');
+            }
+        }
+
+        function goBack() {
+            const currentView = state.viewStack.pop();
+            
+            if (currentView === 'files' && state.pathHistory.length > 0) {
+                // We are in files view, but need to go up a directory instead of back to repos
+                state.viewStack.push('files'); // Put 'files' back on stack
+                const previousPath = state.pathHistory.pop();
+                loadFiles(previousPath);
+                return;
+            }
+
+            const prevView = state.viewStack[state.viewStack.length - 1] || 'repos';
+            
+            let title = 'GitMobile';
+            if (prevView === 'repos') title = 'Repositories';
+            if (prevView === 'files') title = state.currentRepo.name;
+            
+            navigate(prevView, title);
+            
+            // If we just backed into files, we don't pop state.viewStack again, 
+            // navigate() handles not adding duplicates.
+        }
+
+        // Event Listeners
+        document.getElementById('login-submit').addEventListener('click', async () => {
+            const token = document.getElementById('pat-input').value.trim();
+            if(!token) {
+                showToast('Please enter a token', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('login-submit');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+            btn.disabled = true;
+            
+            const success = await authenticate(token);
+            if (success) {
+                document.getElementById('pat-input').value = '';
+                navigate('repos', 'Repositories');
+                loadRepositories();
+                showToast(`Welcome, ${state.user.login}!`, 'success');
+            }
+            
+            btn.innerHTML = 'Connect';
+            btn.disabled = false;
+        });
+
+        DOM.backBtn.addEventListener('click', goBack);
+        
+        DOM.logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('github_pat');
+            state.token = '';
+            state.user = null;
+            state.repos = [];
+            state.viewStack = ['login'];
+            navigate('login', 'GitMobile');
+            showToast('Logged out successfully');
+        });
+
+        document.getElementById('repo-search').addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const filtered = state.repos.filter(r => r.full_name.toLowerCase().includes(query));
+            renderRepositories(filtered);
+        });
+
+        document.getElementById('commit-btn').addEventListener('click', commitChanges);
+
+        // Auto-resize textarea logic
+        const tx = document.getElementById('file-content');
+        tx.addEventListener('input', function() {
+            // Keep it full height of its container mostly, but allow internal scrolling if needed
+            // Handled mostly by flexbox in Tailwind
+        });
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (state.token) {
+                const success = await authenticate(state.token);
+                if (success) {
+                    navigate('repos', 'Repositories');
+                    loadRepositories();
+                } else {
+                    navigate('login');
+                }
+            } else {
+                navigate('login');
+            }
+        });
+
+    </script>
+</body>
+</html>
