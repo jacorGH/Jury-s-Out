@@ -418,9 +418,19 @@ content/
   phrases/   my-phrases.json
 ```
 
-**`content/manifest.json` — required.** Static hosting can't list a directory,
-so a file in `content/cases/` is invisible to the game until it's registered
-here. This is the usual reason a pack "doesn't load".
+**`content/manifest.json` — required, but you don't have to write it.**
+Static hosting can't list a directory, so a file in `content/cases/` is
+invisible to the game until it's registered here.
+
+Rather than maintaining that list by hand, run:
+
+```bash
+node tools/build-manifest.js
+```
+
+It scans `content/`, validates every file, and rewrites the manifest — see
+[Generating the manifest](#generating-the-manifest). A GitHub Action does it
+for you on every push, so adding a case from a phone just works.
 
 ```json
 {
@@ -474,6 +484,42 @@ AI won't break them. A case file may hold one object or an array of them.
 Styles: `flow`, `slam`, `sarcasm`. Tokens: `{defendant}`, `{evidence}`,
 `{target}`. Categories: `press`, `doubt`, `back`, `accuse`, `stall`, `react`,
 `close`. Anything in `general` shows under **React**.
+
+### Generating the manifest
+
+`tools/build-manifest.js` scans `content/` and rewrites `content/manifest.json`.
+No dependencies, Node 18+.
+
+```bash
+node tools/build-manifest.js           # rewrite the manifest
+node tools/build-manifest.js --check   # don't write; exit 1 if stale or broken
+node tools/build-manifest.js --quiet   # only report problems
+```
+
+What it does beyond listing files:
+
+- **Sorts by folder** — `content/cases/`, `content/names/`, `content/phrases/`.
+  A file loose in `content/` is classified by its shape instead.
+- **Validates each one against the game's own rules** and leaves broken files
+  *out* of the manifest with a reason, so a bad pack can't half-load:
+  `cases/bad.json: needs at least one evidence item`
+- **Repairs curly quotes and trailing commas** when parsing, and tells you which
+  file to clean up.
+- **Flags lopsided cases**: `public evidence leans prosecution (3 vs 1) — the AI
+  jurors will drift that way together`.
+- **Handles a file containing an array** of several cases.
+- **Drops stale entries** for files you deleted.
+- Doesn't rewrite the file when nothing changed.
+
+#### Automatic on push
+
+`.github/workflows/update-manifest.yml` runs the script whenever anything under
+`content/` changes and commits the result. That means you can add a case from
+your phone and the manifest updates itself.
+
+It needs **Settings → Actions → General → Workflow permissions → Read and write
+permissions**. Two separate guards stop it retriggering itself: the path filter
+excludes `content/manifest.json`, and the job skips pushes made by the bot.
 
 ### Tuning constants
 
@@ -666,6 +712,8 @@ Host browser  ←── WebRTC data channels ──→  Player browsers
 
 ```
 index.html                  the entire game
+tools/build-manifest.js     regenerates content/manifest.json
+.github/workflows/          Action that runs it on push
 icon.png                    512px app icon
 apple-touch-icon.png        180px iOS icon
 manifest.json               PWA manifest — installs to home screen
