@@ -1,14 +1,19 @@
 {
   "cases": [
+    "cases/counterfeit.json",
     "cases/example-heist.json",
     "cases/riverfront-printing.json",
-    "cases/the-unlicensed-clinic.json",
-    "cases/counterfeit.json",
-    "cases/the-great-alpaca-caper.json",
     "cases/the-dealership-valet-heist.json",
-    "cases/the_spiral_staircase.json",
-    "cases/the_midnight_mink_and_the_blank_canvas.json"
+    "cases/the-great-alpaca-caper.json",
+    "cases/the-unlicensed-clinic.json",
+    "cases/the_midnight_mink_and_the_blank_canvas.json",
+    "cases/the_spiral_staircase.json"
   ],
-  "names": ["names/example-names.json"],
-  "phrases": ["phrases/example-phrases.json"]
+  "names": [
+    "names/example-names.json",
+    "names/random_names.json"
+  ],
+  "phrases": [
+    "phrases/example-phrases.json"
+  ]
 }
