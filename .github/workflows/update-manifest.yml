@@ -47,4 +47,3 @@ jobs:
           git add content/manifest.json
           git commit -m "Update content manifest [skip ci]"
           git push
-
