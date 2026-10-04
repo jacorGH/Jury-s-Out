@@ -1,0 +1,71 @@
+{
+"caseId": "c_catburglar_01",
+"title": "The Midnight Mink and the Blank Canvas",
+"basedOn": "The 2010 Paris Museum of Modern Art heist",
+"contentWarnings": [
+"art theft",
+"satire"
+],
+"tone": "satirical",
+"numDefendants": 1,
+"defendants": [
+{
+"id": "d1",
+"name": "Felix Thorne",
+"trueOutcomeRev": "ytliug"
+}
+],
+"summary": "A priceless modernist masterpiece consisting entirely of white space was stolen from the prestigious Vanderpump Gallery. The thief scaled four stories, bypassed a sophisticated laser grid that had been unplugged to save electricity, and replaced the painting with a piece of drywall. Felix Thorne is accused of executing the heist.",
+"prosecutionStatement": "Seventy-five million dollars of conceptual art vanished into the night air. The glass was cut with surgical precision, leaving only an empty frame and a single black climbing glove. Just an ordinary evening stroll. The defense wants you to believe Felix Thorne is merely an eccentric insomniac who climbs buildings for exercise. Look at the timeline. Four minutes on the roof, one missing canvas. You do not find gallery-grade drywall dust in the pockets of an innocent man. You find it on a thief.",
+"defenseStatement": "The State wants you to build a conviction on drywall dust in a city constantly under construction. My client is a respected parkour instructor who evaluates building safety, not a cat burglar. They rely on a grainy video of a man in a black turtleneck. Half the art district owns a black turtleneck. They conveniently ignore that the gallery owner insured that entirely blank canvas for double its value just one week prior. The State is asking you to ignore a blatant insurance scam and convict a man for exercising at night. A shadow on a wall is not a suspect. And a convenient scapegoat is not a criminal.",
+"evidence": [
+{
+"id": "e1",
+"title": "Roof Access Video",
+"description": "Security footage showing a figure matching Thornes exact height and build scaling the gallery building at 3 AM.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "e2",
+"title": "Insurance Policy Update",
+"description": "Financial records showing the gallery owner doubled the insurance payout on the stolen blank canvas exactly six days before the theft.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "e3",
+"title": "Forensic Clothing Analysis",
+"description": "Traces of premium gallery-grade drywall dust found deeply embedded in Thornes black athletic gear.",
+"favors": "prosecution",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "e4",
+"title": "Parkour Route Log",
+"description": "Documentation proving Thorne frequently scouted commercial rooftops at night to plan routes for his extreme fitness clients.",
+"favors": "defense",
+"visibility": "public",
+"insiderOnly": false
+},
+{
+"id": "e5",
+"title": "Gallery Guard Statement",
+"description": "The night watchman admitted he was sleeping during the theft because the alarm was deliberately unplugged to save on the electricity bill.",
+"favors": "neutral",
+"visibility": "private",
+"insiderOnly": false
+},
+{
+"id": "e6",
+"title": "Underground Broker Ledger",
+"description": "A black-market art dealer recorded a scheduled meeting with Thorne to appraise a perfectly square piece of blank vintage canvas just hours after the heist.",
+"favors": "prosecution",
+"visibility": "private",
+"insiderOnly": true
+}
+]
+}
